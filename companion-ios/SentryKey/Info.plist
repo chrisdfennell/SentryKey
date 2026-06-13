@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Reference Info.plist for the SentryKey iOS companion.
+  If you let Xcode generate Info from build settings, copy these keys into the
+  target's Info tab instead of using this file directly.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Custom URL scheme so Garmin Connect can return the selected device -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.sentrykey.urlscheme</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>sentrykey</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Lets the app open / detect the Garmin Connect Mobile app -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>gcm-ciq</string>
+        <string>connectmobile</string>
+    </array>
+
+    <!-- Privacy usage strings (required or the app is rejected/crashes) -->
+    <key>NSCameraUsageDescription</key>
+    <string>SentryKey uses the camera to scan 2FA QR codes.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>SentryKey uses Bluetooth to sync codes to your Garmin watch.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>SentryKey uses Bluetooth to sync codes to your Garmin watch.</string>
+</dict>
+</plist>
