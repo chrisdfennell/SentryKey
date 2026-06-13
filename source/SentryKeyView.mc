@@ -75,34 +75,24 @@ class SentryKeyView extends WatchUi.View {
         var width = dc.getWidth();
         var height = dc.getHeight();
 
-        // Check screen capabilities for MIP vs AMOLED
-        var deviceSettings = System.getDeviceSettings();
-        var isAmoled = false;
-        if (deviceSettings has :requiresBurnInProtection) {
-            isAmoled = deviceSettings.requiresBurnInProtection;
-        }
-
         // Calculate progress in current 30-second window
         var epochTime = Time.now().value();
         var secondsInWindow = epochTime % 30;
         var progress = (30.0 - secondsInWindow) / 30.0;
+        var secondsRemaining = 30 - secondsInWindow;
+
+        // Premium dark background, shared across MIP and AMOLED
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+        dc.clear();
 
         if (vault.size() == 0) {
-            // Draw empty vault screen
-            if (isAmoled) {
-                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-                dc.clear();
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(width / 2, height / 2 - 30, Graphics.FONT_MEDIUM, "Vault is empty", Graphics.TEXT_JUSTIFY_CENTER);
-                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Sync via SentryKey App", Graphics.TEXT_JUSTIFY_CENTER);
-            } else {
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_WHITE);
-                dc.clear();
-                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(width / 2, height / 2 - 30, Graphics.FONT_MEDIUM, "Vault is empty", Graphics.TEXT_JUSTIFY_CENTER);
-                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Sync via SentryKey App", Graphics.TEXT_JUSTIFY_CENTER);
-            }
+            // Branded empty-vault screen
+            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(width / 2, height / 2 - 28, Graphics.FONT_SMALL, "SENTRYKEY", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(width / 2, height / 2, Graphics.FONT_MEDIUM, "Vault is empty", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(width / 2, height / 2 + 30, Graphics.FONT_XTINY, "Sync via SentryKey app", Graphics.TEXT_JUSTIFY_CENTER);
             return;
         }
 
@@ -118,94 +108,71 @@ class SentryKeyView extends WatchUi.View {
             formattedCode = code.substring(0, 3) + " " + code.substring(3, 6);
         }
 
-        if (isAmoled) {
-            drawAMOLED(dc, formattedCode, label, progress, secondsInWindow);
-        } else {
-            drawMIP(dc, formattedCode, label, progress);
-        }
+        drawTokenFace(dc, formattedCode, label, progress, secondsRemaining);
     }
 
-    // Adaptive layout for Solar Elite MIP (White background, black text, thick horizontal bar)
-    private function drawMIP(dc as Graphics.Dc, codeStr as String, labelStr as String, progress as Float) as Void {
+    // Premium dark token face: perimeter countdown ring, account label, big code.
+    // Used for both MIP and AMOLED (the dark theme suits both and stays consistent).
+    private function drawTokenFace(dc as Graphics.Dc, codeStr as String, labelStr as String, progress as Float, secondsRemaining as Number) as Void {
         var width = dc.getWidth();
         var height = dc.getHeight();
-
-        // MIP Solar Elite Background: clean white
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_WHITE);
-        dc.clear();
-
-        // Foreground: stark solid black
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-
-        // Render Account Label, shrunk/ellipsized to fit the round screen
-        var mipLabelY = height / 4;
-        var mipLabel = fitLabel(dc, labelStr, chordWidth(width, height, mipLabelY) - 12);
-        dc.drawText(width / 2, mipLabelY, mipLabel[0] as Graphics.FontDefinition, mipLabel[1] as String, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-        // Render 6-digit code in largest thick native font that fits
-        var codeFont = getLargestFont(dc, codeStr, width - 40);
-        dc.drawText(width / 2, height / 2, codeFont, codeStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-        // Draw solid thick loading bar in the lower third of the screen
-        var barY = (height * 2) / 3 + 15;
-        var barHeight = 12;
-        var maxBarWidth = width - 80;
-        var barWidth = (maxBarWidth * progress).toNumber();
-        var barX = (width - maxBarWidth) / 2;
-
-        // Draw track outline
-        dc.setPenWidth(2);
-        dc.drawRectangle(barX, barY, maxBarWidth, barHeight);
-
-        // Fill progress
-        if (barWidth > 0) {
-            dc.fillRectangle(barX + 2, barY + 2, barWidth - 4, barHeight - 4);
-        }
-    }
-
-    // Adaptive layout for AMOLED (Pure black background, circular arc, antialiased amber/white)
-    private function drawAMOLED(dc as Graphics.Dc, codeStr as String, labelStr as String, progress as Float, secondsRemaining as Number) as Void {
-        var width = dc.getWidth();
-        var height = dc.getHeight();
-
-        // AMOLED power-saving strict true black background
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        dc.clear();
-
         var cx = width / 2;
         var cy = height / 2;
-        var radius = (width / 2) - 10;
+        var radius = (width / 2) - 8;
 
-        // Perimeter circular countdown arc
+        // Accent turns red in the final 5 seconds as an expiry cue
+        var accent = (secondsRemaining <= 5) ? Graphics.COLOR_RED : Graphics.COLOR_ORANGE;
+
+        // Perimeter countdown ring: dim full-circle track + bright depleting arc
         var startAngle = 90; // 12 o'clock
         var endAngle = (90 - (progress * 360)).toNumber() % 360;
         if (endAngle < 0) {
             endAngle += 360;
         }
-
-        // Draw dim track circle (amber/gray)
-        dc.setPenWidth(4);
+        dc.setPenWidth(6);
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawCircle(cx, cy, radius);
-
-        // Draw active winding down arc (amber/orange glow)
-        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
         dc.drawArc(cx, cy, radius, Graphics.ARC_CLOCKWISE, startAngle, endAngle);
 
-        // Render Account Label in dim light gray, shrunk/ellipsized to fit
+        // Account label near the top, shrunk/ellipsized to fit the round screen
+        var labelY = height / 3;
+        var labelFit = fitLabel(dc, labelStr, chordWidth(width, height, labelY) - 12);
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        var amoledLabelY = height / 3;
-        var amoledLabel = fitLabel(dc, labelStr, chordWidth(width, height, amoledLabelY) - 12);
-        dc.drawText(width / 2, amoledLabelY, amoledLabel[0] as Graphics.FontDefinition, amoledLabel[1] as String, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, labelY, labelFit[0] as Graphics.FontDefinition, labelFit[1] as String, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Render 6-digit code in bright white
+        // 6-digit code, bold and bright, centered
         var codeFont = getLargestFont(dc, codeStr, width - 60);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(width / 2, height / 2, codeFont, codeStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, cy, codeFont, codeStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Render numeric seconds counter below code in bright yellow
-        dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(width / 2, (height * 2) / 3, Graphics.FONT_SMALL, (30 - secondsRemaining) + "s", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Seconds-remaining readout below the code in the accent color
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, (height * 2) / 3, Graphics.FONT_TINY, secondsRemaining + "s", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Page dots when more than one account is stored
+        drawPageDots(dc, width, height);
+    }
+
+    // Small dots indicating which account is active when the vault has several
+    private function drawPageDots(dc as Graphics.Dc, width as Number, height as Number) as Void {
+        var count = vault.size();
+        if (count <= 1 || count > 8) {
+            return;
+        }
+        var spacing = 10;
+        var totalWidth = (count - 1) * spacing;
+        var startX = (width / 2) - (totalWidth / 2);
+        var dotY = (height * 4) / 5;
+        for (var i = 0; i < count; i++) {
+            if (i == activeIndex) {
+                dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+                dc.fillCircle(startX + (i * spacing), dotY, 3);
+            } else {
+                dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.fillCircle(startX + (i * spacing), dotY, 2);
+            }
+        }
     }
 
     // Helper to dynamically select the largest native font without horizontal overflow
