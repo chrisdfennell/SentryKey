@@ -103,6 +103,43 @@ jobs:
           name: sentrykey-companion-apk
           path: companion/app/build/outputs/apk/debug/SentryKey.apk
 
+  build-ios:
+    name: Compile iOS Companion
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The loose .swift sources can't be built alone — xcodebuild needs the
+      # committed Xcode project (and ConnectIQ.framework). Until those exist
+      # this job skips with a notice instead of failing CI.
+      - name: Check for Xcode project
+        id: check
+        run: |
+          if [ -d companion-ios/SentryKey.xcodeproj ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No companion-ios/SentryKey.xcodeproj yet — skipping iOS compile-check. Create it in Xcode, add ConnectIQ.framework, and commit it to enable this job."
+          fi
+
+      - name: Select latest Xcode
+        if: steps.check.outputs.exists == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build (no code signing)
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          xcodebuild build \
+            -project companion-ios/SentryKey.xcodeproj \
+            -scheme SentryKey \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
   create-release:
     name: Publish GitHub Release
     needs: [build-garmin, build-android]
