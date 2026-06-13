@@ -3,6 +3,7 @@ import Toybox.Application.Storage;
 import Toybox.WatchUi;
 import Toybox.Graphics;
 import Toybox.System;
+import Toybox.Math;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
 import Toybox.Timer;
@@ -136,8 +137,10 @@ class SentryKeyView extends WatchUi.View {
         // Foreground: stark solid black
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
 
-        // Render Account Label
-        dc.drawText(width / 2, height / 4, Graphics.FONT_MEDIUM, labelStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Render Account Label, shrunk/ellipsized to fit the round screen
+        var mipLabelY = height / 4;
+        var mipLabel = fitLabel(dc, labelStr, chordWidth(width, height, mipLabelY) - 12);
+        dc.drawText(width / 2, mipLabelY, mipLabel[0] as Graphics.FontDefinition, mipLabel[1] as String, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Render 6-digit code in largest thick native font that fits
         var codeFont = getLargestFont(dc, codeStr, width - 40);
@@ -189,9 +192,11 @@ class SentryKeyView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
         dc.drawArc(cx, cy, radius, Graphics.ARC_CLOCKWISE, startAngle, endAngle);
 
-        // Render Account Label in dim light gray
+        // Render Account Label in dim light gray, shrunk/ellipsized to fit
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(width / 2, height / 3, Graphics.FONT_MEDIUM, labelStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var amoledLabelY = height / 3;
+        var amoledLabel = fitLabel(dc, labelStr, chordWidth(width, height, amoledLabelY) - 12);
+        dc.drawText(width / 2, amoledLabelY, amoledLabel[0] as Graphics.FontDefinition, amoledLabel[1] as String, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Render 6-digit code in bright white
         var codeFont = getLargestFont(dc, codeStr, width - 60);
@@ -220,6 +225,43 @@ class SentryKeyView extends WatchUi.View {
             }
         }
         return Graphics.FONT_MEDIUM;
+    }
+
+    // Horizontal width available inside a round screen at vertical position y
+    private function chordWidth(width as Number, height as Number, y as Number) as Number {
+        var r = width / 2.0;
+        var dy = (height / 2.0) - y;
+        var inside = (r * r) - (dy * dy);
+        if (inside < 0) {
+            inside = 0.0;
+        }
+        return (2 * Math.sqrt(inside)).toNumber();
+    }
+
+    // Pick the largest text font that fits widthLimit; if even the smallest
+    // overflows, ellipsize the string. Returns [font, text].
+    private function fitLabel(dc as Graphics.Dc, text as String, widthLimit as Number) as Array {
+        var fonts = [
+            Graphics.FONT_MEDIUM,
+            Graphics.FONT_SMALL,
+            Graphics.FONT_TINY,
+            Graphics.FONT_XTINY
+        ] as Array<Graphics.FontDefinition>;
+
+        for (var i = 0; i < fonts.size(); i++) {
+            if (dc.getTextWidthInPixels(text, fonts[i]) <= widthLimit) {
+                return [fonts[i], text] as Array;
+            }
+        }
+
+        // Smallest font still overflows: trim characters and append an ellipsis
+        var smallest = fonts[fonts.size() - 1];
+        var truncated = text;
+        while (truncated.length() > 1 &&
+               dc.getTextWidthInPixels(truncated + "...", smallest) > widthLimit) {
+            truncated = truncated.substring(0, truncated.length() - 1);
+        }
+        return [smallest, truncated + "..."] as Array;
     }
 
     // Computes the TOTP code
