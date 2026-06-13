@@ -246,13 +246,8 @@ class SentryKeyView extends WatchUi.View {
             messageBytes[6] = ((timeStep >> 8) & 0xFF);
             messageBytes[7] = (timeStep & 0xFF);
 
-            // Initialize HMAC-SHA1 using Garmin's Cryptography module
-            var hmac = new Cryptography.HashBasedMessageAuthenticationCode({
-                :algorithm => Cryptography.HASH_SHA1,
-                :key => keyBytes
-            });
-            hmac.update(messageBytes);
-            var hmacResult = hmac.digest();
+            // Compute HMAC-SHA1 using custom helper utilizing supported native Hash class
+            var hmacResult = computeHmacSha1(keyBytes, messageBytes);
 
             // Dynamic truncation to extract 6-digit code
             var offset = (hmacResult[19] & 0xFF) & 0x0F;
@@ -266,6 +261,50 @@ class SentryKeyView extends WatchUi.View {
         } catch (e) {
             return "ERRTOTP";
         }
+    }
+
+    // Custom HMAC-SHA1 implementation using native Cryptography.Hash
+    private function computeHmacSha1(keyBytes as ByteArray, messageBytes as ByteArray) as ByteArray {
+        var blockSize = 64; // SHA-1 block size
+        
+        // 1. If key is longer than block size, hash it first
+        var formattedKey = keyBytes;
+        if (formattedKey.size() > blockSize) {
+            var hash = new Cryptography.Hash({:algorithm => Cryptography.HASH_SHA1});
+            hash.update(formattedKey);
+            formattedKey = hash.digest();
+        }
+        
+        // 2. Pad key to block size (64 bytes)
+        var key = new [blockSize]b;
+        for (var i = 0; i < blockSize; i++) {
+            if (i < formattedKey.size()) {
+                key[i] = formattedKey[i];
+            } else {
+                key[i] = 0;
+            }
+        }
+        
+        // 3. Create ipad and opad key arrays
+        var ipadKey = new [blockSize]b;
+        var opadKey = new [blockSize]b;
+        for (var i = 0; i < blockSize; i++) {
+            ipadKey[i] = (key[i] ^ 0x36) & 0xFF;
+            opadKey[i] = (key[i] ^ 0x5C) & 0xFF;
+        }
+        
+        // 4. Compute inner hash: H(ipad || message)
+        var innerHash = new Cryptography.Hash({:algorithm => Cryptography.HASH_SHA1});
+        innerHash.update(ipadKey);
+        innerHash.update(messageBytes);
+        var innerDigest = innerHash.digest();
+        
+        // 5. Compute outer hash: H(opad || innerDigest)
+        var outerHash = new Cryptography.Hash({:algorithm => Cryptography.HASH_SHA1});
+        outerHash.update(opadKey);
+        outerHash.update(innerDigest);
+        
+        return outerHash.digest();
     }
 
     // Base32 Decoding algorithm implemented in pure Monkey C
