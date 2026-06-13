@@ -18,6 +18,8 @@ with the watch binaries and Android APK.
   checker. Added [PRIVACY.md](PRIVACY.md) and [STORE.md](STORE.md).
 
 ### Added
+- **Screenshot protection (Android).** `FLAG_SECURE` blocks screenshots/screen
+  recording and hides codes in the app-switcher preview.
 - **App lock (Android).** Optional biometric / device-credential unlock before
   codes are shown, with re-lock when the app is backgrounded. Toggle in the new
   ⚙ Settings dialog. Off by default.
