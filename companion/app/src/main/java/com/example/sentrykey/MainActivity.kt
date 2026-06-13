@@ -32,9 +32,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.sentrykey.ui.theme.SentryKeyTheme
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import kotlin.math.abs
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
+import java.net.URLDecoder
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -94,6 +100,93 @@ fun getTOTPCode(secret: String, timeSeconds: Long): String {
 }
 
 // ----------------------------------------------------------------------------------
+// URI Parser & Service Domain Resolver
+// ----------------------------------------------------------------------------------
+
+fun parseOtpauthUri(uriString: String): TwoFactorAccount? {
+    try {
+        if (!uriString.startsWith("otpauth://", ignoreCase = true)) return null
+        val cleanUri = uriString.trim()
+        
+        // 1. Extract secret
+        val secretKey = "secret="
+        val secretIndex = cleanUri.indexOf(secretKey)
+        if (secretIndex == -1) return null
+        var secretEnd = cleanUri.indexOf('&', secretIndex)
+        if (secretEnd == -1) secretEnd = cleanUri.length
+        val rawSecret = cleanUri.substring(secretIndex + secretKey.length, secretEnd)
+        val secret = URLDecoder.decode(rawSecret, "UTF-8").uppercase().replace(" ", "").replace("-", "")
+        
+        // 2. Extract label (path segment)
+        val totpKey = "totp/"
+        val totpIndex = cleanUri.indexOf(totpKey)
+        if (totpIndex == -1) return null
+        val labelStart = totpIndex + totpKey.length
+        var labelEnd = cleanUri.indexOf('?', labelStart)
+        if (labelEnd == -1) labelEnd = cleanUri.length
+        var rawLabel = cleanUri.substring(labelStart, labelEnd)
+        rawLabel = URLDecoder.decode(rawLabel, "UTF-8")
+        
+        // 3. Extract optional issuer parameter
+        val issuerKey = "issuer="
+        val issuerIndex = cleanUri.indexOf(issuerKey)
+        val issuer = if (issuerIndex != -1) {
+            var issuerEnd = cleanUri.indexOf('&', issuerIndex)
+            if (issuerEnd == -1) issuerEnd = cleanUri.length
+            val rawIssuer = cleanUri.substring(issuerIndex + issuerKey.length, issuerEnd)
+            URLDecoder.decode(rawIssuer, "UTF-8")
+        } else {
+            ""
+        }
+        
+        // 4. Clean up format
+        var label = rawLabel
+        if (issuer.isNotEmpty() && !label.startsWith(issuer, ignoreCase = true)) {
+            label = "$issuer ($label)"
+        }
+        
+        return TwoFactorAccount(label.trim(), secret)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+fun getServiceDomain(label: String): String {
+    val clean = label.lowercase()
+    return when {
+        clean.contains("github") -> "github.com"
+        clean.contains("google") -> "google.com"
+        clean.contains("slack") -> "slack.com"
+        clean.contains("discord") -> "discord.com"
+        clean.contains("microsoft") -> "microsoft.com"
+        clean.contains("aws") || clean.contains("amazon") -> "amazon.com"
+        clean.contains("facebook") || clean.contains("meta") -> "facebook.com"
+        clean.contains("instagram") -> "instagram.com"
+        clean.contains("twitter") || clean.contains(" x ") || clean.equals("x") -> "x.com"
+        clean.contains("reddit") -> "reddit.com"
+        clean.contains("twitch") -> "twitch.tv"
+        clean.contains("bitbucket") -> "bitbucket.org"
+        clean.contains("gitlab") -> "gitlab.com"
+        clean.contains("dropbox") -> "dropbox.com"
+        clean.contains("heroku") -> "heroku.com"
+        clean.contains("cloudflare") -> "cloudflare.com"
+        clean.contains("digitalocean") -> "digitalocean.com"
+        clean.contains("proton") -> "proton.me"
+        clean.contains("spotify") -> "spotify.com"
+        clean.contains("zoom") -> "zoom.us"
+        clean.contains("epic") -> "epicgames.com"
+        clean.contains("steam") -> "steampowered.com"
+        clean.contains("coinbase") -> "coinbase.com"
+        clean.contains("binance") -> "binance.com"
+        clean.contains("paypal") -> "paypal.com"
+        clean.contains("stripe") -> "stripe.com"
+        clean.contains("nintendo") -> "nintendo.com"
+        clean.contains("playstation") -> "playstation.com"
+        else -> ""
+    }
+}
+
+// ----------------------------------------------------------------------------------
 // MainActivity Entry Point
 // ----------------------------------------------------------------------------------
 
@@ -112,7 +205,7 @@ class MainActivity : ComponentActivity() {
             SentryKeyTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = Color(0xFF07080B) // Pure Dark Background
+                    containerColor = Color(0xFF07080B)
                 ) { innerPadding ->
                     SentryKeyDashboard(
                         vaultStorage = vaultStorage,
@@ -164,6 +257,14 @@ fun SentryKeyDashboard(
     // Filter accounts based on query
     val filteredAccounts = remember(accounts, searchQuery) {
         accounts.filter { it.label.contains(searchQuery, ignoreCase = true) }
+    }
+
+    // Initialize Google Play Services Code Scanner
+    val scanner = remember {
+        val options = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .build()
+        GmsBarcodeScanning.getClient(context, options)
     }
 
     Scaffold(
@@ -307,23 +408,57 @@ fun SentryKeyDashboard(
                 }
             }
 
-            // Search bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("🔍 Search accounts...", color = Color(0xFF5A5F7A)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF10121A),
-                    unfocusedContainerColor = Color(0xFF10121A),
-                    focusedBorderColor = Color(0xFFFFA500),
-                    unfocusedBorderColor = Color(0xFF222533),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp),
+            // Search bar & Scan direct
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("🔍 Search accounts...", color = Color(0xFF5A5F7A)) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF10121A),
+                        unfocusedContainerColor = Color(0xFF10121A),
+                        focusedBorderColor = Color(0xFFFFA500),
+                        unfocusedBorderColor = Color(0xFF222533),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                // Quick Scan QR Button
+                Button(
+                    onClick = {
+                        scanner.startScan()
+                            .addOnSuccessListener { barcode ->
+                                val rawValue = barcode.rawValue ?: ""
+                                val parsedAcc = parseOtpauthUri(rawValue)
+                                if (parsedAcc != null) {
+                                    val updatedList = accounts + parsedAcc
+                                    accounts = updatedList
+                                    vaultStorage.saveAccounts(updatedList)
+                                    Toast.makeText(context, "Added: ${parsedAcc.label}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Scan failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(54.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("📷", fontSize = 20.sp)
+                }
+            }
 
             // Accounts List
             if (filteredAccounts.isEmpty()) {
@@ -363,7 +498,7 @@ fun SentryKeyDashboard(
         }
     }
 
-    // Add Account Dialog
+    // Add Account Dialog (supports Scan + Manual fields)
     if (isAddDialogOpen) {
         AlertDialog(
             onDismissRequest = {
@@ -372,12 +507,41 @@ fun SentryKeyDashboard(
                 newSecret = ""
             },
             title = {
-                Text(
-                    text = "Add 2FA Account",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Add 2FA Account",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    
+                    // Scan inside dialog
+                    TextButton(
+                        onClick = {
+                            scanner.startScan()
+                                .addOnSuccessListener { barcode ->
+                                    val rawValue = barcode.rawValue ?: ""
+                                    val parsedAcc = parseOtpauthUri(rawValue)
+                                    if (parsedAcc != null) {
+                                        newLabel = parsedAcc.label
+                                        newSecret = parsedAcc.secret
+                                        Toast.makeText(context, "QR parsed successfully!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(context, "Scan failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    ) {
+                        Text("📷 Scan QR", color = Color(0xFFFFA500), fontWeight = FontWeight.Bold)
+                    }
+                }
             },
             containerColor = Color(0xFF10121A),
             shape = RoundedCornerShape(16.dp),
@@ -474,11 +638,13 @@ fun AccountCard(
     onDelete: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    var loadFailed by remember { mutableStateOf(false) }
+    
     val timeRemaining = 30 - (currentUnixTime % 30)
     val totpCode = getTOTPCode(account.secret, currentUnixTime)
     val formattedCode = totpCode.take(3) + " " + totpCode.drop(3)
 
-    // Calculate avatar initial and consistent background color
+    // Calculate dynamic fallback avatar letter and background color
     val avatarLetter = account.label.firstOrNull()?.uppercase() ?: "?"
     val avatarBgColor = remember(account.label) {
         val hash = account.label.hashCode()
@@ -490,8 +656,11 @@ fun AccountCard(
             Color(0xFF9C27B0), // Purple
             Color(0xFF4CAF50)  // Green
         )
-        colors[Math.abs(hash) % colors.size]
+        colors[abs(hash) % colors.size]
     }
+
+    // Determine domain for brand favicon URL
+    val serviceDomain = remember(account.label) { getServiceDomain(account.label) }
 
     Card(
         modifier = Modifier
@@ -508,20 +677,33 @@ fun AccountCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Initial Avatar Circle
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(avatarBgColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = avatarLetter,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                // Brand Logo or Fallback Avatar initial
+                if (serviceDomain.isNotEmpty() && !loadFailed) {
+                    AsyncImage(
+                        model = "https://www.google.com/s2/favicons?sz=64&domain=$serviceDomain",
+                        contentDescription = "${account.label} Logo",
+                        onError = { loadFailed = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1B1D2A))
+                            .padding(4.dp)
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(avatarBgColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = avatarLetter,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
