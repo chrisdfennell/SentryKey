@@ -510,12 +510,15 @@ fun SentryKeyDashboard(
                         scanner.startScan()
                             .addOnSuccessListener { barcode ->
                                 val rawValue = barcode.rawValue ?: ""
-                                val parsedAcc = parseOtpauthUri(rawValue)
-                                if (parsedAcc != null) {
-                                    val updatedList = accounts + parsedAcc
+                                val scanned = parseScanResult(rawValue)
+                                if (scanned.isNotEmpty()) {
+                                    val fresh = scanned.filter { new ->
+                                        accounts.none { it.label == new.label && it.secret == new.secret }
+                                    }
+                                    val updatedList = accounts + fresh
                                     accounts = updatedList
                                     vaultStorage.saveAccounts(updatedList)
-                                    Toast.makeText(context, "Added: ${parsedAcc.label}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Added ${fresh.size} account(s)", Toast.LENGTH_LONG).show()
                                 } else {
                                     Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
                                 }
@@ -627,13 +630,31 @@ fun SentryKeyDashboard(
                             scanner.startScan()
                                 .addOnSuccessListener { barcode ->
                                     val rawValue = barcode.rawValue ?: ""
-                                    val parsedAcc = parseOtpauthUri(rawValue)
-                                    if (parsedAcc != null) {
-                                        newLabel = parsedAcc.label
-                                        newSecret = parsedAcc.secret
-                                        Toast.makeText(context, "QR parsed successfully!", Toast.LENGTH_SHORT).show()
+                                    if (GoogleAuthImport.isMigrationUri(rawValue)) {
+                                        // Google Authenticator bulk export — import all at once
+                                        val fresh = GoogleAuthImport.parse(rawValue).filter { new ->
+                                            accounts.none { it.label == new.label && it.secret == new.secret }
+                                        }
+                                        if (fresh.isNotEmpty()) {
+                                            val updatedList = accounts + fresh
+                                            accounts = updatedList
+                                            vaultStorage.saveAccounts(updatedList)
+                                            isAddDialogOpen = false
+                                            newLabel = ""
+                                            newSecret = ""
+                                            Toast.makeText(context, "Imported ${fresh.size} from Google Authenticator", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "Nothing new to import", Toast.LENGTH_SHORT).show()
+                                        }
                                     } else {
-                                        Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
+                                        val parsedAcc = parseOtpauthUri(rawValue)
+                                        if (parsedAcc != null) {
+                                            newLabel = parsedAcc.label
+                                            newSecret = parsedAcc.secret
+                                            Toast.makeText(context, "QR parsed successfully!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
+                                        }
                                     }
                                 }
                                 .addOnFailureListener { e ->
