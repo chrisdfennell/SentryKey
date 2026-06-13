@@ -14,21 +14,44 @@ import android.util.Base64
  */
 object GoogleAuthImport {
 
+    /** Which QR this is within a multi-code Google Authenticator export. */
+    data class BatchInfo(val index: Int, val size: Int)
+
     fun isMigrationUri(raw: String): Boolean =
         raw.startsWith("otpauth-migration://", ignoreCase = true)
 
     fun parse(raw: String): List<TwoFactorAccount> {
-        if (!isMigrationUri(raw)) return emptyList()
+        val bytes = decode(raw) ?: return emptyList()
+        return parsePayload(bytes)
+    }
+
+    /** Reads batch_size (field 3) and batch_index (field 4) from the payload. */
+    fun batchInfo(raw: String): BatchInfo? {
+        val bytes = decode(raw) ?: return null
+        val reader = ProtoReader(bytes)
+        var size = 1
+        var index = 0
+        while (reader.hasMore()) {
+            val (field, wire) = reader.readTag()
+            when {
+                field == 3 && wire == 0 -> size = reader.readVarint().toInt()
+                field == 4 && wire == 0 -> index = reader.readVarint().toInt()
+                else -> reader.skip(wire)
+            }
+        }
+        return BatchInfo(index, size)
+    }
+
+    private fun decode(raw: String): ByteArray? {
+        if (!isMigrationUri(raw)) return null
         val marker = "data="
         val idx = raw.indexOf(marker)
-        if (idx < 0) return emptyList()
+        if (idx < 0) return null
         val dataParam = raw.substring(idx + marker.length).substringBefore('&')
         return try {
-            val decoded = Uri.decode(dataParam)
-            val bytes = Base64.decode(decoded, Base64.DEFAULT)
-            parsePayload(bytes)
+            Base64.decode(Uri.decode(dataParam), Base64.DEFAULT)
         } catch (e: Exception) {
-            emptyList()
+            null
         }
     }
 

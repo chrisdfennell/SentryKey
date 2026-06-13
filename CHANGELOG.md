@@ -34,7 +34,11 @@ with the watch binaries and Android APK.
   vault, VisionKit scanner, and a Connect IQ Mobile SDK sync wrapper.
 - **Import from Google Authenticator** (Android + iOS). Scan GA's
   `otpauth-migration://` export QR to bulk-import; secrets are decoded from the
-  protobuf payload and Base32-encoded into our format.
+  protobuf payload and Base32-encoded into our format. The import modal warns
+  when GA split the export across multiple QR codes (batch N of M).
+- **Import a QR from an image (Android).** 🖼 button decodes a QR from a saved
+  image via ML Kit — useful when the source QR is on the same device or shared
+  as a picture (camera can't scan its own screen).
 - **iOS app lock (Face ID / Touch ID / passcode)** — parity with Android, with
   re-lock on background. Toggle in the ⋯ menu.
 - **In-app update check (testing).** Android polls GitHub Releases and can

@@ -36,11 +36,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import coil.compose.AsyncImage
 import com.example.sentrykey.ui.theme.SentryKeyTheme
+import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -278,6 +283,7 @@ fun SentryKeyDashboard(
     // Scan flow modal state
     var showScanWarning by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<List<TwoFactorAccount>?>(null) }
+    var pendingBatch by remember { mutableStateOf<GoogleAuthImport.BatchInfo?>(null) }
     var scanResult by remember { mutableStateOf<String?>(null) }
     var scanResultError by remember { mutableStateOf(false) }
 
@@ -307,45 +313,82 @@ fun SentryKeyDashboard(
         GmsBarcodeScanning.getClient(context, options)
     }
 
-    // Launches the camera scanner and routes the result into the on-brand modals
-    val startScan: () -> Unit = {
-        scanner.startScan()
-            .addOnSuccessListener { barcode ->
-                val raw = barcode.rawValue ?: ""
+    // Routes a decoded QR value (from camera or image) into the on-brand modals
+    val processRaw: (String) -> Unit = { raw ->
+        when {
+            GoogleAuthImport.isMigrationUri(raw) -> {
+                val batch = GoogleAuthImport.batchInfo(raw)
+                val batchNote = if (batch != null && batch.size > 1) {
+                    " Google Authenticator split this export into ${batch.size} QR codes — this is code ${batch.index + 1} of ${batch.size}, so scan each one to import everything."
+                } else {
+                    ""
+                }
+                val fresh = GoogleAuthImport.parse(raw).filter { new ->
+                    accounts.none { it.label == new.label && it.secret == new.secret }
+                }
+                if (fresh.isEmpty()) {
+                    scanResultError = true
+                    scanResult = "No new accounts were found in that Google Authenticator code.$batchNote"
+                } else {
+                    pendingBatch = batch
+                    pendingImport = fresh
+                }
+            }
+            else -> {
+                val acc = parseOtpauthUri(raw)
                 when {
-                    GoogleAuthImport.isMigrationUri(raw) -> {
-                        val fresh = GoogleAuthImport.parse(raw).filter { new ->
-                            accounts.none { it.label == new.label && it.secret == new.secret }
-                        }
-                        if (fresh.isEmpty()) {
-                            scanResultError = true
-                            scanResult = "No new accounts were found in that Google Authenticator code."
-                        } else {
-                            pendingImport = fresh
-                        }
+                    acc == null -> {
+                        scanResultError = true
+                        scanResult = "That doesn't look like a valid 2FA QR code."
+                    }
+                    accounts.any { it.label == acc.label && it.secret == acc.secret } -> {
+                        scanResultError = false
+                        scanResult = "“${acc.label}” is already in your vault."
                     }
                     else -> {
-                        val acc = parseOtpauthUri(raw)
-                        when {
-                            acc == null -> {
-                                scanResultError = true
-                                scanResult = "That doesn't look like a valid 2FA QR code."
-                            }
-                            accounts.any { it.label == acc.label && it.secret == acc.secret } -> {
-                                scanResultError = false
-                                scanResult = "“${acc.label}” is already in your vault."
-                            }
-                            else -> {
-                                val updated = accounts + acc
-                                accounts = updated
-                                vaultStorage.saveAccounts(updated)
-                                scanResultError = false
-                                scanResult = "Added “${acc.label}”."
-                            }
-                        }
+                        val updated = accounts + acc
+                        accounts = updated
+                        vaultStorage.saveAccounts(updated)
+                        scanResultError = false
+                        scanResult = "Added “${acc.label}”."
                     }
                 }
             }
+        }
+    }
+
+    // Decodes a QR from a picked image (for when GA is on the same device)
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val image = InputImage.fromFilePath(context, uri)
+                BarcodeScanning.getClient().process(image)
+                    .addOnSuccessListener { barcodes ->
+                        val raw = barcodes.firstNotNullOfOrNull { it.rawValue }
+                        if (raw != null) {
+                            processRaw(raw)
+                        } else {
+                            scanResultError = true
+                            scanResult = "No QR code was found in that image."
+                        }
+                    }
+                    .addOnFailureListener {
+                        scanResultError = true
+                        scanResult = "Couldn't read a QR code from that image."
+                    }
+            } catch (e: Exception) {
+                scanResultError = true
+                scanResult = "Couldn't open that image."
+            }
+        }
+    }
+
+    // Launches the camera scanner and routes the result into the on-brand modals
+    val startScan: () -> Unit = {
+        scanner.startScan()
+            .addOnSuccessListener { barcode -> processRaw(barcode.rawValue ?: "") }
             .addOnFailureListener { e ->
                 scanResultError = true
                 scanResult = "Scan failed: ${e.message}"
@@ -459,10 +502,17 @@ fun SentryKeyDashboard(
 
             // Confirm Google Authenticator bulk import
             pendingImport?.let { fresh ->
+                val batch = pendingBatch
+                val multi = batch != null && batch.size > 1
+                val batchNote = if (multi) {
+                    "\n\n⚠ This is code ${batch!!.index + 1} of ${batch.size}. Google Authenticator splits large exports across multiple QR codes — scan each one to import all your accounts."
+                } else {
+                    ""
+                }
                 SentryModal(
                     icon = "📲",
                     title = "Import accounts",
-                    message = "Found ${fresh.size} account(s) in that code. Add them to your vault?",
+                    message = "Found ${fresh.size} account(s) in that code. Add them to your vault?$batchNote",
                     confirmText = "Import ${fresh.size}",
                     onConfirm = {
                         val updated = accounts + fresh
@@ -470,9 +520,17 @@ fun SentryKeyDashboard(
                         vaultStorage.saveAccounts(updated)
                         pendingImport = null
                         scanResultError = false
-                        scanResult = "Imported ${fresh.size} account(s) from Google Authenticator."
+                        scanResult = if (multi) {
+                            "Imported ${fresh.size} from code ${batch!!.index + 1} of ${batch.size}. Scan the remaining codes to finish."
+                        } else {
+                            "Imported ${fresh.size} account(s) from Google Authenticator."
+                        }
+                        pendingBatch = null
                     },
-                    onDismiss = { pendingImport = null }
+                    onDismiss = {
+                        pendingImport = null
+                        pendingBatch = null
+                    }
                 )
             }
 
@@ -613,6 +671,21 @@ fun SentryKeyDashboard(
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Text("📷", fontSize = 20.sp)
+                }
+
+                // Import a QR from a saved image (e.g. when the QR is on this device)
+                Button(
+                    onClick = {
+                        imagePicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(54.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("🖼", fontSize = 20.sp)
                 }
             }
 
