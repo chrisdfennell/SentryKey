@@ -9,6 +9,14 @@ with the watch binaries and Android APK.
 
 ## [Unreleased]
 
+### Changed
+- **Store-readiness prep.** Android `applicationId` is now
+  `com.chrisdfennell.sentrykey` (Play rejects `com.example.*`). The in-app
+  self-updater is **debug-only** (`AUTO_UPDATE_TEST_MODE = BuildConfig.DEBUG`,
+  install permission moved to `src/debug/`) since Play forbids APK self-updates.
+  iOS gets `ITSAppUsesNonExemptEncryption=false` and a disabled-by-default update
+  checker. Added [PRIVACY.md](PRIVACY.md) and [STORE.md](STORE.md).
+
 ### Added
 - **iOS companion app** (`companion-ios/`) — SwiftUI port: CryptoKit
   HMAC-SHA1 TOTP, Base32 decoder, `otpauth://` QR parsing, Keychain-backed

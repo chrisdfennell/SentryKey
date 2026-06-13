@@ -27,6 +27,11 @@
         <string>connectmobile</string>
     </array>
 
+    <!-- Export compliance: only standard/exempt crypto (HMAC-SHA1 via the OS).
+         false = no custom encryption, so no compliance documentation required. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
     <!-- Privacy usage strings (required or the app is rejected/crashes) -->
     <key>NSCameraUsageDescription</key>
     <string>SentryKey uses the camera to scan 2FA QR codes.</string>

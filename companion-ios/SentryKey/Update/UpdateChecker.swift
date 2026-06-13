@@ -19,13 +19,17 @@ final class UpdateChecker: ObservableObject {
     /// 60 req/hour, so this throttles after ~30 minutes.
     private let pollInterval: TimeInterval = 30
 
+    /// Off by default so shipped/App Store builds don't poll. Set true locally
+    /// while testing OTA awareness.
+    private let testingEnabled = false
+
     @Published var newerTag: String?
     @Published var releaseURL: URL?
 
     private var timer: Timer?
 
     func start() {
-        guard timer == nil else { return }
+        guard testingEnabled, timer == nil else { return }
         check()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             self?.check()

@@ -12,7 +12,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.sentrykey"
+        // Public Play Store identity (must not be com.example.*). Kept distinct
+        // from the code `namespace` above, which Play does not see.
+        applicationId = "com.chrisdfennell.sentrykey"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

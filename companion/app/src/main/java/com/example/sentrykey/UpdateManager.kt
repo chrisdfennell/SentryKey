@@ -33,13 +33,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 // ----------------------------------------------------------------------------------
-// TEMPORARY in-app auto-update (for testing).
-// Flip AUTO_UPDATE_TEST_MODE to false (or delete this file + its usage in
-// MainActivity) to disable. Polls GitHub Releases; note the unauthenticated API
-// limit is 60 req/hour, so a 30s interval throttles after ~30 minutes.
+// In-app auto-update for testing — DEBUG BUILDS ONLY.
+// Google Play forbids apps from downloading/installing APKs to self-update, so
+// this is gated to debug builds (the REQUEST_INSTALL_PACKAGES permission lives in
+// the debug-only manifest). Release/Play builds never poll or self-install.
+// Note: the unauthenticated GitHub API limit is 60 req/hour, so a 30s interval
+// throttles after ~30 minutes.
 // ----------------------------------------------------------------------------------
 
-const val AUTO_UPDATE_TEST_MODE = true
+val AUTO_UPDATE_TEST_MODE = BuildConfig.DEBUG
 const val UPDATE_POLL_SECONDS = 30L
 
 object UpdateManager {

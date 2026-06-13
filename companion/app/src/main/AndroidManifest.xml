@@ -7,8 +7,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Used by the in-app updater to install downloaded APKs (testing) -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The install-packages permission for the test-only self-updater is
+         declared in src/debug/AndroidManifest.xml so Play release builds omit it. -->
 
     <application
         android:allowBackup="true"
