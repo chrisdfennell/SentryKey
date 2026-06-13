@@ -66,6 +66,12 @@ jobs:
             -o bin/SentryKey_fenix8solar51mm.prg \
             -d fenix8solar51mm
 
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey_fenix851mm.prg \
+            -d fenix851mm
+
       - name: Upload Garmin Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -131,6 +137,7 @@ jobs:
             garmin-build/SentryKey_fenix847mm.prg
             garmin-build/SentryKey_fenix8solar47mm.prg
             garmin-build/SentryKey_fenix8solar51mm.prg
+            garmin-build/SentryKey_fenix851mm.prg
             android-build/SentryKey.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
