@@ -225,43 +225,47 @@ class SentryKeyView extends WatchUi.View {
 
     // Computes the TOTP code
     private function generateTOTP(secret as String) as String {
-        var keyBytes = decodeBase32(secret);
-        if (keyBytes.size() == 0) {
-            return "ERRKEY";
+        try {
+            var keyBytes = decodeBase32(secret);
+            if (keyBytes.size() == 0) {
+                return "ERRKEY";
+            }
+
+            // Get UTC UNIX epoch time
+            var epochTime = Time.now().value();
+            var timeStep = epochTime / 30;
+
+            // Message is the 8-byte big-endian representation of timeStep
+            var messageBytes = new [8]b;
+            messageBytes[0] = 0;
+            messageBytes[1] = 0;
+            messageBytes[2] = 0;
+            messageBytes[3] = 0;
+            messageBytes[4] = ((timeStep >> 24) & 0xFF);
+            messageBytes[5] = ((timeStep >> 16) & 0xFF);
+            messageBytes[6] = ((timeStep >> 8) & 0xFF);
+            messageBytes[7] = (timeStep & 0xFF);
+
+            // Initialize HMAC-SHA1 using Garmin's Cryptography module
+            var hmac = new Cryptography.HashBasedMessageAuthenticationCode({
+                :algorithm => Cryptography.HASH_SHA1,
+                :key => keyBytes
+            });
+            hmac.update(messageBytes);
+            var hmacResult = hmac.digest();
+
+            // Dynamic truncation to extract 6-digit code
+            var offset = (hmacResult[19] & 0xFF) & 0x0F;
+            var binary = ((hmacResult[offset] & 0x7F) << 24) |
+                         ((hmacResult[offset + 1] & 0xFF) << 16) |
+                         ((hmacResult[offset + 2] & 0xFF) << 8) |
+                         (hmacResult[offset + 3] & 0xFF);
+
+            var otp = binary % 1000000;
+            return otp.format("%06d");
+        } catch (e) {
+            return "ERRTOTP";
         }
-
-        // Get UTC UNIX epoch time
-        var epochTime = Time.now().value();
-        var timeStep = epochTime / 30;
-
-        // Message is the 8-byte big-endian representation of timeStep
-        var messageBytes = new [8]b;
-        messageBytes[0] = 0;
-        messageBytes[1] = 0;
-        messageBytes[2] = 0;
-        messageBytes[3] = 0;
-        messageBytes[4] = ((timeStep >> 24) & 0xFF);
-        messageBytes[5] = ((timeStep >> 16) & 0xFF);
-        messageBytes[6] = ((timeStep >> 8) & 0xFF);
-        messageBytes[7] = (timeStep & 0xFF);
-
-        // Initialize HMAC-SHA1 using Garmin's Cryptography module
-        var hmac = new Cryptography.HashBasedMessageAuthenticationCode({
-            :algorithm => Cryptography.HASH_SHA1,
-            :key => keyBytes
-        });
-        hmac.update(messageBytes);
-        var hmacResult = hmac.digest();
-
-        // Dynamic truncation to extract 6-digit code
-        var offset = (hmacResult[19] & 0xFF) & 0x0F;
-        var binary = ((hmacResult[offset] & 0x7F) << 24) |
-                     ((hmacResult[offset + 1] & 0xFF) << 16) |
-                     ((hmacResult[offset + 2] & 0xFF) << 8) |
-                     (hmacResult[offset + 3] & 0xFF);
-
-        var otp = binary % 1000000;
-        return otp.format("%06d");
     }
 
     // Base32 Decoding algorithm implemented in pure Monkey C

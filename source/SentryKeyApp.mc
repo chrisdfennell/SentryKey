@@ -19,14 +19,18 @@ class SentryKeyApp extends Application.AppBase {
     }
 
     function onAppMessage(mail as Communications.PhoneAppMessage) as Void {
-        var seedStr = mail.data as String?;
-        if (seedStr != null) {
-            var parsedData = parseVaultString(seedStr);
-            Storage.setValue("vault", parsedData);
-            if (view != null) {
-                view.reloadVault();
+        try {
+            var seedStr = mail.data;
+            if (seedStr != null && seedStr instanceof Lang.String) {
+                var parsedData = parseVaultString(seedStr as String);
+                Storage.setValue("vault", parsedData);
+                if (view != null) {
+                    view.reloadVault();
+                }
+                WatchUi.requestUpdate();
             }
-            WatchUi.requestUpdate();
+        } catch (e) {
+            // Prevent crashes from invalid data transmissions
         }
     }
 
