@@ -7,6 +7,8 @@ private let cardDark = Color(red: 0.063, green: 0.071, blue: 0.102) // #10121A
 struct ContentView: View {
     @EnvironmentObject private var vault: VaultStore
     @EnvironmentObject private var sync: GarminSyncManager
+    @StateObject private var updates = UpdateChecker.shared
+    @Environment(\.openURL) private var openURL
 
     @State private var showAdd = false
     @State private var search = ""
@@ -21,6 +23,9 @@ struct ContentView: View {
             ZStack {
                 bgDark.ignoresSafeArea()
                 VStack(spacing: 16) {
+                    if let tag = updates.newerTag {
+                        updateBanner(tag: tag)
+                    }
                     syncCard
                     if vault.accounts.isEmpty {
                         Spacer()
@@ -58,6 +63,26 @@ struct ContentView: View {
             }
         }
         .tint(brandOrange)
+        .onAppear { updates.start() }
+    }
+
+    private func updateBanner(tag: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Update available").font(.footnote.bold()).foregroundStyle(.green)
+                Text(tag).font(.caption).foregroundStyle(.white)
+            }
+            Spacer()
+            Button("View") {
+                if let url = updates.releaseURL { openURL(url) }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+        }
+        .padding()
+        .background(Color.green.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 
     private var syncCard: some View {

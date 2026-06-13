@@ -39,6 +39,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import kotlin.math.abs
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 import javax.crypto.Mac
@@ -254,6 +255,24 @@ fun SentryKeyDashboard(
         }
     }
 
+    // --- TEMP in-app auto-update (testing). Polls GitHub Releases. ---
+    val scope = rememberCoroutineScope()
+    var updateTag by remember { mutableStateOf<String?>(null) }
+    var updateUrl by remember { mutableStateOf<String?>(null) }
+    var updateBusy by remember { mutableStateOf(false) }
+    if (AUTO_UPDATE_TEST_MODE) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                val info = UpdateManager.fetchLatest()
+                if (info?.apkUrl != null && info.tag != BuildConfig.RELEASE_TAG) {
+                    updateTag = info.tag
+                    updateUrl = info.apkUrl
+                }
+                delay(UPDATE_POLL_SECONDS * 1000)
+            }
+        }
+    }
+
     // Filter accounts based on query
     val filteredAccounts = remember(accounts, searchQuery) {
         accounts.filter { it.label.contains(searchQuery, ignoreCase = true) }
@@ -287,6 +306,28 @@ fun SentryKeyDashboard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // In-app update banner (testing)
+            val tag = updateTag
+            val url = updateUrl
+            if (tag != null && url != null) {
+                UpdateBanner(tag = tag, busy = updateBusy) {
+                    if (!canInstallApks(context)) {
+                        requestInstallPermission(context)
+                    } else {
+                        updateBusy = true
+                        scope.launch {
+                            val file = UpdateManager.downloadApk(context, url)
+                            updateBusy = false
+                            if (file != null) {
+                                UpdateManager.installApk(context, file)
+                            } else {
+                                Toast.makeText(context, "Update download failed", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),

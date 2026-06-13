@@ -13,6 +13,10 @@ with the watch binaries and Android APK.
 - **iOS companion app** (`companion-ios/`) — SwiftUI port: CryptoKit
   HMAC-SHA1 TOTP, Base32 decoder, `otpauth://` QR parsing, Keychain-backed
   vault, VisionKit scanner, and a Connect IQ Mobile SDK sync wrapper.
+- **In-app update check (testing).** Android polls GitHub Releases and can
+  download + install a newer APK in-app; iOS shows a notify-only banner linking
+  to the release (the platform forbids self-install). Toggle via
+  `AUTO_UPDATE_TEST_MODE` (Android) / `UpdateChecker` (iOS).
 - Project documentation: top-level `README`, `CONTRIBUTING`, `SECURITY`,
   `CODE_OF_CONDUCT`, `CHANGELOG`, issue/PR templates.
 - CI: iOS compile-check job (skips until the Xcode project is committed).

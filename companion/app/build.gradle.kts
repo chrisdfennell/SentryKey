@@ -18,6 +18,12 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Tag of the build, used by the in-app updater to detect newer releases.
+        // GITHUB_REF_NAME is the tag (e.g. "v1.0.0-beta.15") on CI tag builds;
+        // falls back to "dev" for local builds (which then offer the latest release).
+        val releaseTag = System.getenv("GITHUB_REF_NAME") ?: "dev"
+        buildConfigField("String", "RELEASE_TAG", "\"$releaseTag\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -48,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
