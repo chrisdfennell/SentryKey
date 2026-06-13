@@ -18,6 +18,9 @@ with the watch binaries and Android APK.
   checker. Added [PRIVACY.md](PRIVACY.md) and [STORE.md](STORE.md).
 
 ### Added
+- **Drag-to-reorder accounts (Android).** Long-press an account to pick it up
+  and drag it up/down the list; the order is saved and sets which account the
+  watch shows first. Plus Rename and "Make first" actions in the account panel.
 - **Screenshot protection (Android).** `FLAG_SECURE` blocks screenshots/screen
   recording and hides codes in the app-switcher preview.
 - **App lock (Android).** Optional biometric / device-credential unlock before

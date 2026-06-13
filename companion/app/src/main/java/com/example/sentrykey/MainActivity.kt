@@ -20,6 +20,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -545,16 +548,30 @@ fun SentryKeyDashboard(
                     )
                 }
             } else {
+                val lazyListState = rememberLazyListState()
+                val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+                    val updated = accounts.toMutableList().apply {
+                        add(to.index, removeAt(from.index))
+                    }
+                    accounts = updated
+                    vaultStorage.saveAccounts(updated)
+                }
+                // Drag-to-reorder only when not searching (indices map to the full list)
+                val canReorder = searchQuery.isBlank()
                 LazyColumn(
+                    state = lazyListState,
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredAccounts) { account ->
+                    items(filteredAccounts, key = { "${it.label}:${it.secret}" }) { account ->
+                      ReorderableItem(reorderState, key = "${account.label}:${account.secret}") { isDragging ->
                         AccountCard(
                             account = account,
                             currentUnixTime = currentUnixTime,
                             clipboardManager = clipboardManager,
                             context = context,
+                            dragging = isDragging,
+                            modifier = if (canReorder) Modifier.longPressDraggableHandle() else Modifier,
                             onDelete = {
                                 val updatedList = accounts.filter { it != account }
                                 accounts = updatedList
@@ -576,6 +593,7 @@ fun SentryKeyDashboard(
                                 Toast.makeText(context, "Moved to top — sync to update watch", Toast.LENGTH_SHORT).show()
                             }
                         )
+                      }
                     }
                 }
             }
@@ -721,7 +739,9 @@ fun AccountCard(
     context: Context,
     onDelete: () -> Unit,
     onRename: (String) -> Unit,
-    onMakeFirst: () -> Unit
+    onMakeFirst: () -> Unit,
+    modifier: Modifier = Modifier,
+    dragging: Boolean = false
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
@@ -751,10 +771,14 @@ fun AccountCard(
     val serviceDomain = remember(account.label) { getServiceDomain(account.label) }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { isExpanded = !isExpanded }
-            .border(1.dp, Color(0xFF222533), RoundedCornerShape(12.dp)),
+            .border(
+                1.dp,
+                if (dragging) Color(0xFFFFA500) else Color(0xFF222533),
+                RoundedCornerShape(12.dp)
+            ),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF10121A)),
         shape = RoundedCornerShape(12.dp)
     ) {
