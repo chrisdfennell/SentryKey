@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"$PSScriptRoot\\\\build.ps1\" -Device fenix8solar51mm 2>&1 | Out-String)",
+      "PowerShell(& \"c:\\\\programming\\\\SentryKey\\\\build.ps1\" -Device fenix8solar51mm 2>&1)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\christopher.fennell\\.claude\\projects\\c--programming-SentryKey\\memory"
+    ]
+  }
+}
