@@ -1,0 +1,5 @@
+<settings>
+    <setting propertyKey="@Properties.cryptoSeeds" title="@Strings.cryptoSeedsTitle" prompt="@Strings.cryptoSeedsTitle">
+        <settingConfig type="alphaNumeric" maxLength="500" />
+    </setting>
+</settings>

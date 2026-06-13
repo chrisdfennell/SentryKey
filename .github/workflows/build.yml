@@ -1,0 +1,95 @@
+name: SentryKey Build CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-garmin:
+    name: Build Garmin Watch App
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/blackshadev/garmin-connectiq-tools:9.1.0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Decode Developer Key
+        run: |
+          if [ -z "${{ secrets.GARMIN_DEVELOPER_KEY }}" ]; then
+            echo "Error: GARMIN_DEVELOPER_KEY secret is not set!" >&2
+            exit 1
+          fi
+          echo "${{ secrets.GARMIN_DEVELOPER_KEY }}" | base64 --decode > developer_key.der
+
+      - name: Compile Garmin App
+        run: |
+          mkdir -p bin
+          
+          echo "Compiling Garmin Store Package (.iq)..."
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -e \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey.iq
+          
+          echo "Compiling Garmin Watch Binaries (.prg)..."
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey_fenix843mm.prg \
+            -d fenix843mm
+          
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey_fenix847mm.prg \
+            -d fenix847mm
+          
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey_fenix8solar47mm.prg \
+            -d fenix8solar47mm
+          
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKey_fenix8solar51mm.prg \
+            -d fenix8solar51mm
+
+      - name: Upload Garmin Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentrykey-garmin-build
+          path: bin/
+
+  build-android:
+    name: Build Android Companion App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Build Android App
+        run: |
+          cd companion
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentrykey-companion-apk
+          path: companion/app/build/outputs/apk/debug/app-debug.apk

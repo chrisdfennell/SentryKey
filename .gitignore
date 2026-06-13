@@ -1,0 +1,17 @@
+# Garmin SentryKey Build Outputs
+/bin/
+build_config.json
+developer_key.der
+developer_key.der.base64
+
+# Android Companion App Gradle/IDE
+/companion/.gradle/
+/companion/.idea/
+/companion/.kotlin/
+/companion/local.properties
+/companion/app/build/
+
+# General Java/OS files
+*.class
+.DS_Store
+Thumbs.db
