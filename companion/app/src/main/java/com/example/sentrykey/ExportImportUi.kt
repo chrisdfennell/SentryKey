@@ -58,6 +58,22 @@ fun VaultActionsRow(
         }
     }
 
+    // Save-to-device via the system document picker (writes wherever the user picks)
+    val saveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(ExportImport.accountsToJson(accounts).toByteArray())
+                }
+                Toast.makeText(context, "Vault saved", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -91,10 +107,16 @@ fun VaultActionsRow(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showExportWarning = false
-                    ExportImport.shareBackup(context, accounts)
-                }) { Text("Export") }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        showExportWarning = false
+                        saveLauncher.launch("sentrykey-vault.json")
+                    }) { Text("Save to file") }
+                    TextButton(onClick = {
+                        showExportWarning = false
+                        ExportImport.shareBackup(context, accounts)
+                    }) { Text("Share") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showExportWarning = false }) { Text("Cancel") }

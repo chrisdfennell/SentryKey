@@ -25,6 +25,8 @@ with the watch binaries and Android APK.
   download + install a newer APK in-app; iOS shows a notify-only banner linking
   to the release (the platform forbids self-install). Toggle via
   `AUTO_UPDATE_TEST_MODE` (Android) / `UpdateChecker` (iOS).
+- **Export "Save to file" (Android).** Export now offers a system "Save to…"
+  document picker (write the backup to Downloads/etc.), not just Share-to-app.
 - **Export / import (otpauth standard).** Export the vault as a JSON backup
   (with `otpauth://` URIs) or per-account QR codes scannable by any
   authenticator; import from a JSON/otpauth file or by scanning a QR. Works on
