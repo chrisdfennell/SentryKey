@@ -8,10 +8,18 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,10 +27,75 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sentrykey.ui.theme.SentryKeyTheme
+import kotlinx.coroutines.delay
+import java.io.ByteArrayOutputStream
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+
+// ----------------------------------------------------------------------------------
+// File-level TOTP Encryption Engine
+// ----------------------------------------------------------------------------------
+
+fun decodeBase32(base32: String): ByteArray {
+    val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    val clean = base32.uppercase().replace(" ", "").replace("-", "").replace("=", "")
+    val out = ByteArrayOutputStream()
+    var bits = 0
+    var value = 0
+    for (i in 0 until clean.length) {
+        val char = clean[i]
+        val lookup = allowedChars.indexOf(char)
+        if (lookup < 0) continue
+        value = (value shl 5) or lookup
+        bits += 5
+        if (bits >= 8) {
+            bits -= 8
+            out.write((value shr bits) and 0xFF)
+        }
+    }
+    return out.toByteArray()
+}
+
+fun getTOTPCode(secret: String, timeSeconds: Long): String {
+    try {
+        val key = decodeBase32(secret)
+        if (key.isEmpty()) return "000000"
+        val epoch30 = timeSeconds / 30
+        val data = ByteArray(8)
+        var temp = epoch30
+        for (i in 7 downTo 0) {
+            data[i] = (temp and 0xFF).toByte()
+            temp = temp shr 8
+        }
+        val mac = Mac.getInstance("HmacSHA1")
+        val keySpec = SecretKeySpec(key, "HmacSHA1")
+        mac.init(keySpec)
+        val hash = mac.doFinal(data)
+        val offset = (hash[hash.size - 1].toInt() and 0x0F)
+        val binary = (((hash[offset].toInt() and 0x7F) shl 24) or
+                ((hash[offset + 1].toInt() and 0xFF) shl 16) or
+                ((hash[offset + 2].toInt() and 0xFF) shl 8) or
+                ((hash[offset + 3].toInt() and 0xFF)))
+        val otp = binary % 1000000
+        var result = otp.toString()
+        while (result.length < 6) {
+            result = "0$result"
+        }
+        return result
+    } catch (e: Exception) {
+        return "000000"
+    }
+}
+
+// ----------------------------------------------------------------------------------
+// MainActivity Entry Point
+// ----------------------------------------------------------------------------------
 
 class MainActivity : ComponentActivity() {
     private lateinit var vaultStorage: VaultStorage
@@ -39,7 +112,7 @@ class MainActivity : ComponentActivity() {
             SentryKeyTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = Color(0xFF0F1016) // Premium dark charcoal
+                    containerColor = Color(0xFF07080B) // Pure Dark Background
                 ) { innerPadding ->
                     SentryKeyDashboard(
                         vaultStorage = vaultStorage,
@@ -54,6 +127,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// ----------------------------------------------------------------------------------
+// SentryKey Dashboard UI
+// ----------------------------------------------------------------------------------
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SentryKeyDashboard(
@@ -64,89 +141,284 @@ fun SentryKeyDashboard(
     modifier: Modifier = Modifier
 ) {
     var accounts by remember { mutableStateOf(vaultStorage.getAccounts()) }
+    var searchQuery by remember { mutableStateOf("") }
+    
+    // Add Account Dialog state
+    var isAddDialogOpen by remember { mutableStateOf(false) }
     var newLabel by remember { mutableStateOf("") }
     var newSecret by remember { mutableStateOf("") }
 
+    // Sync status states
     var syncStatus by remember { mutableStateOf("Ready to sync") }
-    var syncStatusColor by remember { mutableStateOf(Color(0xFF8A90A6)) }
+    var syncStatusColor by remember { mutableStateOf(Color(0xFF8F93A3)) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // App Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    // Live clock timer for 1Hz updates
+    var currentUnixTime by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentUnixTime = System.currentTimeMillis() / 1000
+            delay(1000)
+        }
+    }
+
+    // Filter accounts based on query
+    val filteredAccounts = remember(accounts, searchQuery) {
+        accounts.filter { it.label.contains(searchQuery, ignoreCase = true) }
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { isAddDialogOpen = true },
+                containerColor = Color(0xFFFFA500),
+                contentColor = Color(0xFF07080B),
+                shape = CircleShape
+            ) {
+                Text("+", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column {
-                Text(
-                    text = "SentryKey 2FA",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "Garmin tactix 8 Companion",
-                    fontSize = 14.sp,
-                    color = Color(0xFFFFA500), // Tactix amber accent
-                    fontWeight = FontWeight.Medium
-                )
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "SENTRYKEY VAULT",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Companion App",
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFA500),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                
+                // Active count badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF222533))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "${accounts.size} SEEDS",
+                        fontSize = 11.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Sync Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFF222533), RoundedCornerShape(12.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF10121A)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Connection dot indicator
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(syncStatusColor)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = syncStatus,
+                            fontSize = 13.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val vaultStr = vaultStorage.toVaultString(accounts)
+                                syncManager.syncVault(vaultStr, object : GarminSyncManager.SyncCallback {
+                                    override fun onSuccess(message: String) {
+                                        syncStatus = message
+                                        syncStatusColor = Color(0xFF22C55E)
+                                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                    }
+
+                                    override fun onError(error: String) {
+                                        syncStatus = error
+                                        syncStatusColor = Color(0xFFEF4444)
+                                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                    }
+
+                                    override fun onStatusUpdate(status: String) {
+                                        syncStatus = status
+                                        syncStatusColor = Color(0xFFF97316)
+                                    }
+                                })
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("🔄 Sync Watch", color = Color(0xFF07080B), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                val vaultStr = vaultStorage.toVaultString(accounts)
+                                val clip = ClipData.newPlainText("SentryKey Vault", vaultStr)
+                                clipboardManager.setPrimaryClip(clip)
+                                Toast.makeText(context, "Copied vault string to clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("📋 Copy String", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("🔍 Search accounts...", color = Color(0xFF5A5F7A)) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF10121A),
+                    unfocusedContainerColor = Color(0xFF10121A),
+                    focusedBorderColor = Color(0xFFFFA500),
+                    unfocusedBorderColor = Color(0xFF222533),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // Accounts List
+            if (filteredAccounts.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (accounts.isEmpty()) "No accounts stored. Tap '+' below." else "No matches found.",
+                        color = Color(0xFF5A5F7A),
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredAccounts) { account ->
+                        AccountCard(
+                            account = account,
+                            currentUnixTime = currentUnixTime,
+                            clipboardManager = clipboardManager,
+                            context = context,
+                            onDelete = {
+                                val updatedList = accounts.filter { it != account }
+                                accounts = updatedList
+                                vaultStorage.saveAccounts(updatedList)
+                                Toast.makeText(context, "Deleted account", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
             }
         }
+    }
 
-        // Add Account Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF191B26)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+    // Add Account Dialog
+    if (isAddDialogOpen) {
+        AlertDialog(
+            onDismissRequest = {
+                isAddDialogOpen = false
+                newLabel = ""
+                newSecret = ""
+            },
+            title = {
                 Text(
-                    text = "Add Authenticator Seed",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    text = "Add 2FA Account",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
                 )
+            },
+            containerColor = Color(0xFF10121A),
+            shape = RoundedCornerShape(16.dp),
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newLabel,
+                        onValueChange = { newLabel = it },
+                        label = { Text("Account Label (e.g. GitHub)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFA500),
+                            unfocusedBorderColor = Color(0xFF222533),
+                            focusedLabelColor = Color(0xFFFFA500),
+                            unfocusedLabelColor = Color(0xFF8F93A3),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                OutlinedTextField(
-                    value = newLabel,
-                    onValueChange = { newLabel = it },
-                    label = { Text("Account Name (e.g. GitHub)") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFFFA500),
-                        unfocusedBorderColor = Color(0xFF3F445F),
-                        focusedLabelColor = Color(0xFFFFA500),
-                        unfocusedLabelColor = Color(0xFF8A90A6),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = newSecret,
-                    onValueChange = { newSecret = it.uppercase().replace(" ", "") },
-                    label = { Text("Base32 Secret Seed") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFFFA500),
-                        unfocusedBorderColor = Color(0xFF3F445F),
-                        focusedLabelColor = Color(0xFFFFA500),
-                        unfocusedLabelColor = Color(0xFF8A90A6),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
+                    OutlinedTextField(
+                        value = newSecret,
+                        onValueChange = { newSecret = it.uppercase().replace(" ", "") },
+                        label = { Text("Base32 Secret Seed") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFA500),
+                            unfocusedBorderColor = Color(0xFF222533),
+                            focusedLabelColor = Color(0xFFFFA500),
+                            unfocusedLabelColor = Color(0xFF8F93A3),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
                 Button(
                     onClick = {
                         val cleanSecret = newSecret.trim()
@@ -162,173 +434,218 @@ fun SentryKeyDashboard(
                             val updatedList = accounts + newAcc
                             accounts = updatedList
                             vaultStorage.saveAccounts(updatedList)
+                            isAddDialogOpen = false
                             newLabel = ""
                             newSecret = ""
-                            Toast.makeText(context, "Account added locally", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Account added", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Add Account", color = Color(0xFF0F1016), fontWeight = FontWeight.Bold)
+                    Text("Add Account", color = Color(0xFF07080B), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        isAddDialogOpen = false
+                        newLabel = ""
+                        newSecret = ""
+                    }
+                ) {
+                    Text("Cancel", color = Color(0xFF8F93A3))
                 }
             }
-        }
-
-        // Sync Status Panel
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF151722))
-                .padding(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Sync Status:", fontSize = 14.sp, color = Color(0xFF8A90A6))
-                Text(
-                    text = syncStatus,
-                    fontSize = 14.sp,
-                    color = syncStatusColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        // Action Buttons Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = {
-                    val vaultStr = vaultStorage.toVaultString(accounts)
-                    syncManager.syncVault(vaultStr, object : GarminSyncManager.SyncCallback {
-                        override fun onSuccess(message: String) {
-                            syncStatus = message
-                            syncStatusColor = Color(0xFF4CAF50)
-                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                        }
-
-                        override fun onError(error: String) {
-                            syncStatus = error
-                            syncStatusColor = Color(0xFFF44336)
-                            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                        }
-
-                        override fun onStatusUpdate(status: String) {
-                            syncStatus = status
-                            syncStatusColor = Color(0xFFFFA500)
-                        }
-                    })
-                },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(12.dp)
-            ) {
-                Text("Sync Watch", color = Color.White)
-            }
-
-            Button(
-                onClick = {
-                    val vaultStr = vaultStorage.toVaultString(accounts)
-                    val clip = ClipData.newPlainText("SentryKey Vault", vaultStr)
-                    clipboardManager.setPrimaryClip(clip)
-                    Toast.makeText(context, "Copied vault settings to clipboard", Toast.LENGTH_LONG).show()
-                },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F445F)),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(12.dp)
-            ) {
-                Text("Copy String", color = Color.White)
-            }
-        }
-
-        // Vault list header
-        Text(
-            text = "Active Accounts (${accounts.size})",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White
         )
-
-        // Stored accounts list
-        if (accounts.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No accounts stored. Add one above.",
-                    color = Color(0xFF5A5F7A),
-                    fontSize = 14.sp
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(accounts) { account ->
-                    AccountItemCard(
-                        account = account,
-                        onDelete = {
-                            val updatedList = accounts.filter { it != account }
-                            accounts = updatedList
-                            vaultStorage.saveAccounts(updatedList)
-                            Toast.makeText(context, "Account deleted", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
-            }
-        }
     }
 }
 
+// ----------------------------------------------------------------------------------
+// Account Card Composable
+// ----------------------------------------------------------------------------------
+
 @Composable
-fun AccountItemCard(account: TwoFactorAccount, onDelete: () -> Unit) {
+fun AccountCard(
+    account: TwoFactorAccount,
+    currentUnixTime: Long,
+    clipboardManager: ClipboardManager,
+    context: Context,
+    onDelete: () -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    val timeRemaining = 30 - (currentUnixTime % 30)
+    val totpCode = getTOTPCode(account.secret, currentUnixTime)
+    val formattedCode = totpCode.take(3) + " " + totpCode.drop(3)
+
+    // Calculate avatar initial and consistent background color
+    val avatarLetter = account.label.firstOrNull()?.uppercase() ?: "?"
+    val avatarBgColor = remember(account.label) {
+        val hash = account.label.hashCode()
+        val colors = listOf(
+            Color(0xFF3F51B5), // Indigo
+            Color(0xFFE91E63), // Pink
+            Color(0xFF009688), // Teal
+            Color(0xFFFF9800), // Orange
+            Color(0xFF9C27B0), // Purple
+            Color(0xFF4CAF50)  // Green
+        )
+        colors[Math.abs(hash) % colors.size]
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E202E)),
-        shape = RoundedCornerShape(8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { isExpanded = !isExpanded }
+            .border(1.dp, Color(0xFF222533), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF10121A)),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(14.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Initial Avatar Circle
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(avatarBgColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = avatarLetter,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Account Name & Info Label
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = account.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Tap to manage",
+                        fontSize = 10.sp,
+                        color = Color(0xFF5A5F7A)
+                    )
+                }
+
+                // Spaced TOTP 2FA Code
                 Text(
-                    text = account.label,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
+                    text = formattedCode,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1B1D2A))
+                        .clickable {
+                            val clip = ClipData.newPlainText("SentryKey OTP", totpCode)
+                            clipboardManager.setPrimaryClip(clip)
+                            Toast.makeText(context, "Code copied", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = account.secret,
-                    fontSize = 13.sp,
-                    color = Color(0xFF8A90A6),
-                    fontWeight = FontWeight.Light
-                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Canvas Countdown circle
+                Canvas(modifier = Modifier.size(20.dp)) {
+                    val sweepAngle = (timeRemaining.toFloat() / 30f) * 360f
+                    drawArc(
+                        color = Color(0xFF222533),
+                        startAngle = 0f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = Stroke(width = 2.5.dp.toPx())
+                    )
+                    drawArc(
+                        color = if (timeRemaining <= 5) Color(0xFFEF4444) else Color(0xFFFFA500),
+                        startAngle = -90f,
+                        sweepAngle = sweepAngle,
+                        useCenter = false,
+                        style = Stroke(width = 2.5.dp.toPx())
+                    )
+                }
             }
-            TextButton(onClick = onDelete) {
-                Text(
-                    text = "DELETE",
-                    color = Color(0xFFF44336),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
+
+            // Expanded seed management panel
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(150)),
+                exit = shrinkVertically(animationSpec = tween(150))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .border(1.dp, Color(0xFF222533), RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0B0D13))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = "SECRET SEED KEY",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF8F93A3),
+                        letterSpacing = 1.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // Display Base32 seed in clean groups of 4
+                    val spacedSecret = account.secret.chunked(4).joinToString(" ")
+                    Text(
+                        text = spacedSecret,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val clip = ClipData.newPlainText("SentryKey Seed", account.secret)
+                                clipboardManager.setPrimaryClip(clip)
+                                Toast.makeText(context, "Seed key copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("📋 Copy Seed", fontSize = 11.sp, color = Color.White)
+                        }
+
+                        Button(
+                            onClick = onDelete,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x22EF4444)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("🗑 Delete", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }
