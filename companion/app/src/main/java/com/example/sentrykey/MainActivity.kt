@@ -560,6 +560,20 @@ fun SentryKeyDashboard(
                                 accounts = updatedList
                                 vaultStorage.saveAccounts(updatedList)
                                 Toast.makeText(context, "Deleted account", Toast.LENGTH_SHORT).show()
+                            },
+                            onRename = { newLabel ->
+                                val updatedList = accounts.map {
+                                    if (it == account) it.copy(label = newLabel) else it
+                                }
+                                accounts = updatedList
+                                vaultStorage.saveAccounts(updatedList)
+                                Toast.makeText(context, "Renamed", Toast.LENGTH_SHORT).show()
+                            },
+                            onMakeFirst = {
+                                val updatedList = listOf(account) + accounts.filter { it != account }
+                                accounts = updatedList
+                                vaultStorage.saveAccounts(updatedList)
+                                Toast.makeText(context, "Moved to top — sync to update watch", Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
@@ -705,11 +719,14 @@ fun AccountCard(
     currentUnixTime: Long,
     clipboardManager: ClipboardManager,
     context: Context,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRename: (String) -> Unit,
+    onMakeFirst: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
     var showQr by remember { mutableStateOf(false) }
+    var showEdit by remember { mutableStateOf(false) }
     
     val timeRemaining = 30 - (currentUnixTime % 30)
     val totpCode = getTOTPCode(account.secret, currentUnixTime)
@@ -909,8 +926,69 @@ fun AccountCard(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showEdit = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("✏ Rename", fontSize = 11.sp, color = Color.White)
+                        }
+
+                        Button(
+                            onClick = onMakeFirst,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("⭐ Make first", fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+
                     if (showQr) {
                         AccountQrDialog(account = account) { showQr = false }
+                    }
+
+                    if (showEdit) {
+                        var editLabel by remember { mutableStateOf(account.label) }
+                        AlertDialog(
+                            onDismissRequest = { showEdit = false },
+                            containerColor = Color(0xFF10121A),
+                            title = { Text("Rename account", color = Color.White) },
+                            text = {
+                                OutlinedTextField(
+                                    value = editLabel,
+                                    onValueChange = { editLabel = it },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFFFFA500),
+                                        unfocusedBorderColor = Color(0xFF222533),
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    )
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val trimmed = editLabel.trim()
+                                    if (trimmed.isNotEmpty()) {
+                                        onRename(trimmed)
+                                        showEdit = false
+                                    }
+                                }) { Text("Save") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showEdit = false }) { Text("Cancel") }
+                            }
+                        )
                     }
                 }
             }
