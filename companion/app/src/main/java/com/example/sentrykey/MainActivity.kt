@@ -449,6 +449,15 @@ fun SentryKeyDashboard(
                 }
             }
 
+            // Export / Import (otpauth standard) — interop with other authenticators
+            VaultActionsRow(accounts = accounts) { imported ->
+                val merged = accounts + imported.filter { new ->
+                    accounts.none { it.label == new.label && it.secret == new.secret }
+                }
+                accounts = merged
+                vaultStorage.saveAccounts(merged)
+            }
+
             // Search bar & Scan direct
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -680,6 +689,7 @@ fun AccountCard(
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
+    var showQr by remember { mutableStateOf(false) }
     
     val timeRemaining = 30 - (currentUnixTime % 30)
     val totpCode = getTOTPCode(account.secret, currentUnixTime)
@@ -845,6 +855,16 @@ fun AccountCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
+                            onClick = { showQr = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("🔳 QR", fontSize = 11.sp, color = Color.White)
+                        }
+
+                        Button(
                             onClick = {
                                 val clip = ClipData.newPlainText("SentryKey Seed", account.secret)
                                 clipboardManager.setPrimaryClip(clip)
@@ -855,7 +875,7 @@ fun AccountCard(
                             shape = RoundedCornerShape(6.dp),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Text("📋 Copy Seed", fontSize = 11.sp, color = Color.White)
+                            Text("📋 Copy", fontSize = 11.sp, color = Color.White)
                         }
 
                         Button(
@@ -867,6 +887,10 @@ fun AccountCard(
                         ) {
                             Text("🗑 Delete", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
                         }
+                    }
+
+                    if (showQr) {
+                        AccountQrDialog(account = account) { showQr = false }
                     }
                 }
             }

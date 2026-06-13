@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 private let brandOrange = Color(red: 1.0, green: 0.647, blue: 0.0) // #FFA500
 private let bgDark = Color(red: 0.027, green: 0.031, blue: 0.043)  // #07080B
@@ -12,6 +13,8 @@ struct ContentView: View {
 
     @State private var showAdd = false
     @State private var search = ""
+    @State private var qrAccount: TwoFactorAccount?
+    @State private var importing = false
 
     private var filtered: [TwoFactorAccount] {
         search.isEmpty ? vault.accounts
@@ -42,6 +45,11 @@ struct ContentView: View {
                                             vault.delete(account)
                                         } label: { Label("Delete", systemImage: "trash") }
                                     }
+                                    .contextMenu {
+                                        Button {
+                                            qrAccount = account
+                                        } label: { Label("Show QR", systemImage: "qrcode") }
+                                    }
                             }
                         }
                         .scrollContentBackground(.hidden)
@@ -52,6 +60,16 @@ struct ContentView: View {
             }
             .navigationTitle("SentryKey Vault")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        ShareLink("Export vault", item: VaultExportImport.exportFile(vault.accounts) ?? URL(fileURLWithPath: "/dev/null"))
+                        Button {
+                            importing = true
+                        } label: { Label("Import vault", systemImage: "square.and.arrow.down") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle").foregroundStyle(brandOrange)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: {
                         Image(systemName: "plus.circle.fill").foregroundStyle(brandOrange)
@@ -61,9 +79,30 @@ struct ContentView: View {
             .sheet(isPresented: $showAdd) {
                 AddAccountView()
             }
+            .sheet(item: $qrAccount) { account in
+                AccountQRSheet(account: account)
+            }
+            .fileImporter(
+                isPresented: $importing,
+                allowedContentTypes: [.json, .plainText, .text],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImport(result)
+            }
         }
         .tint(brandOrange)
         .onAppear { updates.start() }
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        guard case let .success(urls) = result, let url = urls.first else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        for account in VaultExportImport.parseImport(text)
+        where !vault.accounts.contains(where: { $0.label == account.label && $0.secret == account.secret }) {
+            vault.add(account)
+        }
     }
 
     private func updateBanner(tag: String) -> some View {
