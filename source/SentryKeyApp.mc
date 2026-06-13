@@ -83,8 +83,11 @@ class SentryKeyApp extends Application.AppBase {
         var pairs = splitString(seedStr, ",");
         for (var i = 0; i < pairs.size(); i++) {
             var pair = pairs[i];
-            var colonIndex = pair.find(":");
-            if (colonIndex != null) {
+            // Split on the LAST colon, not the first: QR-scanned labels often
+            // contain a colon (e.g. "Discord:username"), while a Base32 secret
+            // never does, so the final colon is always the true delimiter.
+            var colonIndex = lastIndexOf(pair, ":");
+            if (colonIndex >= 0) {
                 var label = pair.substring(0, colonIndex);
                 var secret = pair.substring(colonIndex + 1, pair.length());
                 
@@ -119,6 +122,17 @@ class SentryKeyApp extends Application.AppBase {
     // Check if character is whitespace helper
     private function isWhitespace(char as String) as Boolean {
         return char.equals(" ") || char.equals("\t") || char.equals("\r") || char.equals("\n");
+    }
+
+    // Return the index of the last occurrence of a single-character needle, or -1
+    private function lastIndexOf(str as String, needle as String) as Number {
+        var found = -1;
+        for (var i = 0; i < str.length(); i++) {
+            if (str.substring(i, i + 1).equals(needle)) {
+                found = i;
+            }
+        }
+        return found;
     }
 
     // Split string helper

@@ -122,11 +122,6 @@ class SentryKeyView extends WatchUi.View {
         } else {
             drawMIP(dc, formattedCode, label, progress);
         }
-
-        // TEMP DEBUG: raw UTC epoch seconds the watch is feeding to the TOTP.
-        // Compare against true UTC to isolate clock skew vs an algorithm bug.
-        dc.setColor(isAmoled ? Graphics.COLOR_LT_GRAY : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(width / 2, height - 18, Graphics.FONT_XTINY, "t=" + epochTime.toString(), Graphics.TEXT_JUSTIFY_CENTER);
     }
 
     // Adaptive layout for Solar Elite MIP (White background, black text, thick horizontal bar)
