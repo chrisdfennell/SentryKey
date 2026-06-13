@@ -3,8 +3,13 @@ name: SentryKey Build CI
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - "v*"
   pull_request:
     branches: [ "main" ]
+
+permissions:
+  contents: write
 
 jobs:
   build-garmin:
@@ -93,3 +98,36 @@ jobs:
         with:
           name: sentrykey-companion-apk
           path: companion/app/build/outputs/apk/debug/app-debug.apk
+
+  create-release:
+    name: Publish GitHub Release
+    needs: [build-garmin, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download Garmin Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sentrykey-garmin-build
+          path: garmin-build/
+
+      - name: Download Android Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sentrykey-companion-apk
+          path: android-build/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            garmin-build/SentryKey.iq
+            garmin-build/SentryKey_fenix843mm.prg
+            garmin-build/SentryKey_fenix847mm.prg
+            garmin-build/SentryKey_fenix8solar47mm.prg
+            garmin-build/SentryKey_fenix8solar51mm.prg
+            android-build/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
