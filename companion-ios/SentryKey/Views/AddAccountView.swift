@@ -54,7 +54,14 @@ struct AddAccountView: View {
             }
             .sheet(isPresented: $showScanner) {
                 QRScannerView { scanned in
-                    if let account = OtpAuthParser.parse(scanned) {
+                    if GoogleAuthImport.isMigrationURI(scanned) {
+                        // Google Authenticator bulk export — import all and close
+                        let fresh = GoogleAuthImport.parse(scanned).filter { new in
+                            !vault.accounts.contains { $0.label == new.label && $0.secret == new.secret }
+                        }
+                        fresh.forEach { vault.add($0) }
+                        dismiss()
+                    } else if let account = OtpAuthParser.parse(scanned) {
                         label = account.label
                         secret = account.secret
                     } else {

@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var search = ""
     @State private var qrAccount: TwoFactorAccount?
     @State private var importing = false
+    @AppStorage("app_lock_enabled") private var appLockEnabled = false
 
     private var filtered: [TwoFactorAccount] {
         search.isEmpty ? vault.accounts
@@ -66,6 +67,9 @@ struct ContentView: View {
                         Button {
                             importing = true
                         } label: { Label("Import vault", systemImage: "square.and.arrow.down") }
+                        Toggle(isOn: $appLockEnabled) {
+                            Label("App lock (Face ID)", systemImage: "faceid")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle").foregroundStyle(brandOrange)
                     }

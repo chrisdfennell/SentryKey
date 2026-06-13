@@ -29,6 +29,11 @@ with the watch binaries and Android APK.
 - **iOS companion app** (`companion-ios/`) — SwiftUI port: CryptoKit
   HMAC-SHA1 TOTP, Base32 decoder, `otpauth://` QR parsing, Keychain-backed
   vault, VisionKit scanner, and a Connect IQ Mobile SDK sync wrapper.
+- **Import from Google Authenticator** (Android + iOS). Scan GA's
+  `otpauth-migration://` export QR to bulk-import; secrets are decoded from the
+  protobuf payload and Base32-encoded into our format.
+- **iOS app lock (Face ID / Touch ID / passcode)** — parity with Android, with
+  re-lock on background. Toggle in the ⋯ menu.
 - **In-app update check (testing).** Android polls GitHub Releases and can
   download + install a newer APK in-app; iOS shows a notify-only banner linking
   to the release (the platform forbids self-install). Toggle via

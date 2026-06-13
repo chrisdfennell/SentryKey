@@ -12,14 +12,16 @@ struct SentryKeyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(vault)
-                .environmentObject(sync)
-                .preferredColorScheme(.dark)
-                .onOpenURL { url in
-                    // Garmin Connect returns the chosen device via our URL scheme.
-                    GarminSyncManager.shared.handleOpenURL(url)
-                }
+            AppLockGate {
+                ContentView()
+                    .environmentObject(vault)
+                    .environmentObject(sync)
+            }
+            .preferredColorScheme(.dark)
+            .onOpenURL { url in
+                // Garmin Connect returns the chosen device via our URL scheme.
+                GarminSyncManager.shared.handleOpenURL(url)
+            }
         }
     }
 }

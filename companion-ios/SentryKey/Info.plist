@@ -35,6 +35,8 @@
     <!-- Privacy usage strings (required or the app is rejected/crashes) -->
     <key>NSCameraUsageDescription</key>
     <string>SentryKey uses the camera to scan 2FA QR codes.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>SentryKey uses Face ID to lock and unlock access to your codes.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>SentryKey uses Bluetooth to sync codes to your Garmin watch.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
