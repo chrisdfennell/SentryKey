@@ -18,6 +18,11 @@ developer_key.der.base64
 /companion-ios/**/DerivedData/
 /companion-ios/Pods/
 
+# Garmin Connect IQ Mobile SDK — licensed binary, do not commit. Download from
+# https://developer.garmin.com/connect-iq/sdk/ and add locally in Xcode.
+**/ConnectIQ.framework/
+**/ConnectIQ.xcframework/
+
 # General Java/OS files
 *.class
 .DS_Store

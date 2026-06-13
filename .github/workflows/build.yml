@@ -111,9 +111,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # The loose .swift sources can't be built alone — xcodebuild needs the
-      # committed Xcode project (and ConnectIQ.framework). Until those exist
-      # this job skips with a notice instead of failing CI.
+      # The loose .swift sources can't be built alone — xcodebuild needs a
+      # committed Xcode project. ConnectIQ.framework is a licensed Garmin binary
+      # that is NOT committed, so CI must fetch it at build time (e.g. a download
+      # step using a private URL secret) before the build step will link.
+      # Until the project exists this job skips with a notice instead of failing.
       - name: Check for Xcode project
         id: check
         run: |
@@ -121,7 +123,7 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No companion-ios/SentryKey.xcodeproj yet — skipping iOS compile-check. Create it in Xcode, add ConnectIQ.framework, and commit it to enable this job."
+            echo "::notice::No companion-ios/SentryKey.xcodeproj yet — skipping iOS compile-check. Create it in Xcode to enable this job. Note: ConnectIQ.framework is gitignored (licensed); CI must fetch it before building."
           fi
 
       - name: Select latest Xcode

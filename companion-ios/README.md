@@ -40,7 +40,7 @@ companion-ios/SentryKey/
 
 1. **Create the project:** Xcode → *New Project* → *App* (SwiftUI, Swift). Name it `SentryKey`.
 2. **Add the sources:** drag the folders above into the target (✓ *Copy if needed*, ✓ add to target).
-3. **Add the SDK:** drop `ConnectIQ.framework` into the project; under *General → Frameworks, Libraries, and Embedded Content* set it to **Embed & Sign**.
+3. **Add the SDK:** download `ConnectIQ.framework` from Garmin and drop it into the project locally; under *General → Frameworks, Libraries, and Embedded Content* set it to **Embed & Sign**. It's a **licensed Garmin binary and is gitignored — do not commit it.**
 4. **Info.plist:** merge the keys from [`Info.plist`](SentryKey/Info.plist) — the `sentrykey` URL scheme, `gcm-ciq` query scheme, and camera/Bluetooth usage strings.
 5. **Capabilities:** the `appUUID` in `GarminSyncManager.swift` already matches the watch (`a8d3e91b-…`); leave it.
 6. **Run on a real device** and grant camera + Bluetooth permissions.
@@ -59,3 +59,6 @@ Unlike Android, device selection bounces through Garmin Connect:
 - Secrets live in the **Keychain** (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), not UserDefaults.
 - `ConnectIQ` API signatures can vary slightly by SDK version; if the compiler
   flags one (e.g. `sendMessage` or `IQApp` init), match it to your SDK headers.
+- **`ConnectIQ.framework` is not committed** (licensed Garmin binary). Each
+  developer downloads it locally. CI can't link it unless it's fetched at build
+  time (e.g. a download step using a private URL stored as a secret).
