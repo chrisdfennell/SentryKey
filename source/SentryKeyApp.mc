@@ -63,8 +63,12 @@ class SentryKeyApp extends Application.AppBase {
             // Properties might not exist yet in simulator
         }
 
-        if (seedStr != null) {
-            var parsedData = parseVaultString(seedStr);
+        // Only let the app-settings string seed the vault when it actually
+        // contains data. The property defaults to "" (empty, not null), so an
+        // unconditional write here would wipe a vault that was synced over BLE
+        // (onAppMessage) every time the app restarts.
+        if (seedStr != null && seedStr instanceof Lang.String && (seedStr as String).length() > 0) {
+            var parsedData = parseVaultString(seedStr as String);
             Storage.setValue("vault", parsedData);
         }
     }
