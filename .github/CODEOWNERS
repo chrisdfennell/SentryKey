@@ -1,0 +1,8 @@
+# Default owner for everything in the repo
+*       @chrisdfennell
+
+# Component owners (adjust as collaborators join)
+/source/         @chrisdfennell
+/companion/      @chrisdfennell
+/companion-ios/  @chrisdfennell
+/.github/        @chrisdfennell

@@ -1,0 +1,66 @@
+name: 🐛 Bug Report
+description: Report a problem with the watch app or a companion app
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please fill out the sections below.
+        For **security vulnerabilities**, do not file here — see [SECURITY.md](../blob/main/SECURITY.md).
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part is affected?
+      options:
+        - Garmin watch app
+        - Android companion
+        - iOS companion
+        - Build / CI
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add an account via …
+        2. Tap Sync Watch
+        3. Open the watch app
+        4. See …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash log / error output
+      description: For watch crashes, paste the CIQ_LOG / ERA error report (Part-Number, Firmware-Version, Stack…).
+      render: text
+  - type: input
+    id: device
+    attributes:
+      label: Device & firmware
+      placeholder: "fenix 8 Solar 51mm, firmware 22.35"
+  - type: input
+    id: version
+    attributes:
+      label: App version / release tag
+      placeholder: "v1.0.0-beta.14"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through SECURITY.md).
+          required: true

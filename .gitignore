@@ -11,6 +11,13 @@ developer_key.der.base64
 /companion/local.properties
 /companion/app/build/
 
+# iOS Companion (Xcode / Swift)
+/companion-ios/build/
+/companion-ios/**/*.xcuserstate
+/companion-ios/**/xcuserdata/
+/companion-ios/**/DerivedData/
+/companion-ios/Pods/
+
 # General Java/OS files
 *.class
 .DS_Store
