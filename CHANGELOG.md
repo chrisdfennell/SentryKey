@@ -18,6 +18,9 @@ with the watch binaries and Android APK.
   checker. Added [PRIVACY.md](PRIVACY.md) and [STORE.md](STORE.md).
 
 ### Added
+- **Custom scan modals (Android).** Replaced the plain scan toasts with a
+  reusable on-brand modal: a pre-scan privacy warning, a "found N — import?"
+  confirmation for Google Authenticator codes, and a styled success/error result.
 - **Drag-to-reorder accounts (Android).** Long-press an account to pick it up
   and drag it up/down the list; the order is saved and sets which account the
   watch shows first. Plus Rename and "Make first" actions in the account panel.

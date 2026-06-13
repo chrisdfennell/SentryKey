@@ -274,6 +274,13 @@ fun SentryKeyDashboard(
     var updateUrl by remember { mutableStateOf<String?>(null) }
     var updateBusy by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+
+    // Scan flow modal state
+    var showScanWarning by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<List<TwoFactorAccount>?>(null) }
+    var scanResult by remember { mutableStateOf<String?>(null) }
+    var scanResultError by remember { mutableStateOf(false) }
+
     if (AUTO_UPDATE_TEST_MODE) {
         LaunchedEffect(Unit) {
             while (true) {
@@ -298,6 +305,51 @@ fun SentryKeyDashboard(
             .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
             .build()
         GmsBarcodeScanning.getClient(context, options)
+    }
+
+    // Launches the camera scanner and routes the result into the on-brand modals
+    val startScan: () -> Unit = {
+        scanner.startScan()
+            .addOnSuccessListener { barcode ->
+                val raw = barcode.rawValue ?: ""
+                when {
+                    GoogleAuthImport.isMigrationUri(raw) -> {
+                        val fresh = GoogleAuthImport.parse(raw).filter { new ->
+                            accounts.none { it.label == new.label && it.secret == new.secret }
+                        }
+                        if (fresh.isEmpty()) {
+                            scanResultError = true
+                            scanResult = "No new accounts were found in that Google Authenticator code."
+                        } else {
+                            pendingImport = fresh
+                        }
+                    }
+                    else -> {
+                        val acc = parseOtpauthUri(raw)
+                        when {
+                            acc == null -> {
+                                scanResultError = true
+                                scanResult = "That doesn't look like a valid 2FA QR code."
+                            }
+                            accounts.any { it.label == acc.label && it.secret == acc.secret } -> {
+                                scanResultError = false
+                                scanResult = "“${acc.label}” is already in your vault."
+                            }
+                            else -> {
+                                val updated = accounts + acc
+                                accounts = updated
+                                vaultStorage.saveAccounts(updated)
+                                scanResultError = false
+                                scanResult = "Added “${acc.label}”."
+                            }
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                scanResultError = true
+                scanResult = "Scan failed: ${e.message}"
+            }
     }
 
     Scaffold(
@@ -388,6 +440,54 @@ fun SentryKeyDashboard(
 
             if (showSettings) {
                 SettingsDialog(onDismiss = { showSettings = false })
+            }
+
+            // Pre-scan privacy warning
+            if (showScanWarning) {
+                SentryModal(
+                    icon = "📷",
+                    title = "Before you scan",
+                    message = "A 2FA QR code contains the account's secret key. Make sure no one can see your screen or look over your shoulder.",
+                    confirmText = "Scan",
+                    onConfirm = {
+                        showScanWarning = false
+                        startScan()
+                    },
+                    onDismiss = { showScanWarning = false }
+                )
+            }
+
+            // Confirm Google Authenticator bulk import
+            pendingImport?.let { fresh ->
+                SentryModal(
+                    icon = "📲",
+                    title = "Import accounts",
+                    message = "Found ${fresh.size} account(s) in that code. Add them to your vault?",
+                    confirmText = "Import ${fresh.size}",
+                    onConfirm = {
+                        val updated = accounts + fresh
+                        accounts = updated
+                        vaultStorage.saveAccounts(updated)
+                        pendingImport = null
+                        scanResultError = false
+                        scanResult = "Imported ${fresh.size} account(s) from Google Authenticator."
+                    },
+                    onDismiss = { pendingImport = null }
+                )
+            }
+
+            // Styled scan result (success / error)
+            scanResult?.let { msg ->
+                SentryModal(
+                    icon = if (scanResultError) "⚠️" else "✅",
+                    title = if (scanResultError) "Couldn't scan" else "Done",
+                    message = msg,
+                    confirmText = "OK",
+                    dismissText = null,
+                    confirmColor = if (scanResultError) Color(0xFFEF4444) else Color(0xFFFFA500),
+                    onConfirm = { scanResult = null },
+                    onDismiss = { scanResult = null }
+                )
             }
 
             // Sync Card
@@ -506,27 +606,7 @@ fun SentryKeyDashboard(
 
                 // Quick Scan QR Button
                 Button(
-                    onClick = {
-                        scanner.startScan()
-                            .addOnSuccessListener { barcode ->
-                                val rawValue = barcode.rawValue ?: ""
-                                val scanned = parseScanResult(rawValue)
-                                if (scanned.isNotEmpty()) {
-                                    val fresh = scanned.filter { new ->
-                                        accounts.none { it.label == new.label && it.secret == new.secret }
-                                    }
-                                    val updatedList = accounts + fresh
-                                    accounts = updatedList
-                                    vaultStorage.saveAccounts(updatedList)
-                                    Toast.makeText(context, "Added ${fresh.size} account(s)", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "Invalid 2FA QR Code", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(context, "Scan failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                    },
+                    onClick = { showScanWarning = true },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.size(54.dp),
