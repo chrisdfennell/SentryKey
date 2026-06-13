@@ -18,6 +18,9 @@ with the watch binaries and Android APK.
   checker. Added [PRIVACY.md](PRIVACY.md) and [STORE.md](STORE.md).
 
 ### Added
+- **App lock (Android).** Optional biometric / device-credential unlock before
+  codes are shown, with re-lock when the app is backgrounded. Toggle in the new
+  ⚙ Settings dialog. Off by default.
 - **iOS companion app** (`companion-ios/`) — SwiftUI port: CryptoKit
   HMAC-SHA1 TOTP, Base32 decoder, `otpauth://` QR parsing, Keychain-backed
   vault, VisionKit scanner, and a Connect IQ Mobile SDK sync wrapper.

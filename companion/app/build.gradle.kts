@@ -63,6 +63,7 @@ android {
 dependencies {
     implementation("com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation(libs.play.services.code.scanner)
     implementation(libs.coil.compose)
     implementation(platform(libs.androidx.compose.bom))

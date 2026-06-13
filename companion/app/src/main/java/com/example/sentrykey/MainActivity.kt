@@ -5,9 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -191,7 +191,7 @@ fun getServiceDomain(label: String): String {
 // MainActivity Entry Point
 // ----------------------------------------------------------------------------------
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var vaultStorage: VaultStorage
     private lateinit var syncManager: GarminSyncManager
 
@@ -204,17 +204,19 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SentryKeyTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = Color(0xFF07080B)
-                ) { innerPadding ->
-                    SentryKeyDashboard(
-                        vaultStorage = vaultStorage,
-                        syncManager = syncManager,
-                        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
-                        context = this,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                AppLockGate {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color(0xFF07080B)
+                    ) { innerPadding ->
+                        SentryKeyDashboard(
+                            vaultStorage = vaultStorage,
+                            syncManager = syncManager,
+                            clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
+                            context = this,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
                 }
             }
         }
@@ -260,6 +262,7 @@ fun SentryKeyDashboard(
     var updateTag by remember { mutableStateOf<String?>(null) }
     var updateUrl by remember { mutableStateOf<String?>(null) }
     var updateBusy by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     if (AUTO_UPDATE_TEST_MODE) {
         LaunchedEffect(Unit) {
             while (true) {
@@ -351,20 +354,29 @@ fun SentryKeyDashboard(
                     )
                 }
                 
-                // Active count badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222533))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "${accounts.size} SEEDS",
-                        fontSize = 11.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                // Count badge + settings gear
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF222533))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${accounts.size} SEEDS",
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    TextButton(onClick = { showSettings = true }) {
+                        Text("⚙", fontSize = 20.sp, color = Color.White)
+                    }
                 }
+            }
+
+            if (showSettings) {
+                SettingsDialog(onDismiss = { showSettings = false })
             }
 
             // Sync Card
