@@ -95,13 +95,13 @@ class SentryKeyView extends WatchUi.View {
                 dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
                 dc.drawText(width / 2, height / 2 - 30, Graphics.FONT_MEDIUM, "Vault is empty", Graphics.TEXT_JUSTIFY_CENTER);
                 dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Set seeds in ConnectIQ", Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Sync via SentryKey App", Graphics.TEXT_JUSTIFY_CENTER);
             } else {
                 dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_WHITE);
                 dc.clear();
                 dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
                 dc.drawText(width / 2, height / 2 - 30, Graphics.FONT_MEDIUM, "Vault is empty", Graphics.TEXT_JUSTIFY_CENTER);
-                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Set seeds in ConnectIQ", Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(width / 2, height / 2 + 10, Graphics.FONT_SMALL, "Sync via SentryKey App", Graphics.TEXT_JUSTIFY_CENTER);
             }
             return;
         }
