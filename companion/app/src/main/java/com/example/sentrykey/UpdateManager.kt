@@ -47,7 +47,7 @@ const val UPDATE_POLL_SECONDS = 30L
 object UpdateManager {
     private const val RELEASES_API =
         "https://api.github.com/repos/chrisdfennell/SentryKey/releases/latest"
-    private const val APK_ASSET_NAME = "SentryKey.apk"
+    private const val APK_ASSET_NAME = "com.chrisdfennell.SentryKey.apk"
 
     data class ReleaseInfo(val tag: String, val apkUrl: String?)
 

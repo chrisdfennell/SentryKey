@@ -95,13 +95,13 @@ jobs:
 
       - name: Rename APK file
         run: |
-          mv companion/app/build/outputs/apk/debug/app-debug.apk companion/app/build/outputs/apk/debug/SentryKey.apk
+          mv companion/app/build/outputs/apk/debug/app-debug.apk companion/app/build/outputs/apk/debug/com.chrisdfennell.SentryKey.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: sentrykey-companion-apk
-          path: companion/app/build/outputs/apk/debug/SentryKey.apk
+          path: companion/app/build/outputs/apk/debug/com.chrisdfennell.SentryKey.apk
 
   build-ios:
     name: Compile iOS Companion
@@ -170,7 +170,7 @@ jobs:
             garmin-build/SentryKey_fenix847mm.prg
             garmin-build/SentryKey_fenix8solar47mm.prg
             garmin-build/SentryKey_fenix8solar51mm.prg
-            android-build/SentryKey.apk
+            android-build/com.chrisdfennell.SentryKey.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
