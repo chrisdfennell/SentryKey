@@ -23,7 +23,7 @@ jobs:
             echo "Error: GARMIN_DEVELOPER_KEY secret is not set!" >&2
             exit 1
           fi
-          echo "${{ secrets.GARMIN_DEVELOPER_KEY }}" | base64 --decode > developer_key.der
+          echo "${{ secrets.GARMIN_DEVELOPER_KEY }}" | base64 -d > developer_key.der
 
       - name: Compile Garmin App
         run: |
