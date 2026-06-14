@@ -1,0 +1,49 @@
+# Dependabot configuration.
+# Covers the ecosystems with a supported package manager:
+#   - Gradle (Android companion, incl. the libs.versions.toml catalog)
+#   - GitHub Actions (CI workflows)
+# The iOS companion vendors the Connect IQ SDK as a framework (no package
+# manager) and the Garmin watch app is Monkey C, so neither is managed here.
+version: 2
+updates:
+  # --- Android companion (Gradle) ---
+  - package-ecosystem: "gradle"
+    directory: "/companion"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "android"
+    commit-message:
+      prefix: "build(deps)"
+    # Roll routine minor/patch bumps into a single PR to cut review noise;
+    # major bumps stay as their own PRs so breaking changes get attention.
+    groups:
+      gradle-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- GitHub Actions (CI workflows) ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions-all:
+        update-types:
+          - "minor"
+          - "patch"
