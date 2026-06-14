@@ -31,6 +31,23 @@ final class VaultStore: ObservableObject {
         accounts.map { "\($0.label):\($0.secret)" }.joined(separator: ",")
     }
 
+    /// Parses the watch vault string "label:secret,label:secret" back into
+    /// accounts (split each entry on its LAST colon, mirroring the watch). Used
+    /// by watch -> phone recovery.
+    static func parseVaultString(_ s: String) -> [TwoFactorAccount] {
+        var out: [TwoFactorAccount] = []
+        for rawPair in s.split(separator: ",") {
+            let pair = rawPair.trimmingCharacters(in: .whitespaces)
+            guard let colon = pair.lastIndex(of: ":") else { continue }
+            let label = String(pair[..<colon]).trimmingCharacters(in: .whitespaces)
+            let secret = String(pair[pair.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+            if !label.isEmpty && !secret.isEmpty {
+                out.append(TwoFactorAccount(label: label, secret: secret))
+            }
+        }
+        return out
+    }
+
     // MARK: - Persistence
 
     private func persist() {

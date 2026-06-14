@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var search = ""
     @State private var qrAccount: TwoFactorAccount?
     @State private var importing = false
+    @State private var restoreMessage: String?
     @AppStorage("app_lock_enabled") private var appLockEnabled = false
 
     private var filtered: [TwoFactorAccount] {
@@ -96,6 +97,32 @@ struct ContentView: View {
         }
         .tint(brandOrange)
         .onAppear { updates.start() }
+        .onChange(of: sync.lastPulledVault) { pulledString in
+            guard let pulledString else { return }
+            sync.lastPulledVault = nil
+            let pulled = VaultStore.parseVaultString(pulledString)
+            if pulled.isEmpty {
+                restoreMessage = "The watch sent an empty vault. Nothing to restore."
+                return
+            }
+            var added = 0
+            for account in pulled
+            where !vault.accounts.contains(where: { $0.label == account.label && $0.secret == account.secret }) {
+                vault.add(account)
+                added += 1
+            }
+            restoreMessage = added == 0
+                ? "Your vault is already up to date — all \(pulled.count) account(s) from the watch are already here."
+                : "Restored \(added) account(s) from your watch."
+        }
+        .alert(
+            "Restore from Watch",
+            isPresented: Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) { restoreMessage = nil }
+        } message: {
+            Text(restoreMessage ?? "")
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -157,6 +184,17 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
             }
+
+            // Recover the vault FROM the watch (e.g. after losing this phone).
+            // The watch prompts for confirmation before sending anything back.
+            Button {
+                sync.requestVaultFromWatch()
+            } label: {
+                Label("Restore from Watch", systemImage: "arrow.down.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(brandOrange)
         }
         .padding()
         .background(cardDark)

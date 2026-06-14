@@ -20,9 +20,17 @@ final class GarminSyncManager: NSObject, ObservableObject {
     private let appUUID = UUID(uuidString: "a8d3e91b-cf52-4a87-bb4b-9800d0c85467")!
     private let urlScheme = "sentrykey" // also declared in Info.plist CFBundleURLTypes
 
+    // Asks the watch to send its vault back (watch -> phone recovery). MUST match
+    // PULL_REQUEST in the watch app and pullRequest in the Android companion.
+    private let pullRequest = "__SENTRYKEY_PULL__"
+
     @Published var statusText: String = "Ready to sync"
     @Published var selectedDevice: IQDevice?
     @Published var deviceConnected: Bool = false
+
+    /// Set to the vault string the watch returns from a recovery pull. The UI
+    /// observes this, merges, then clears it back to nil.
+    @Published var lastPulledVault: String?
 
     private var iqApp: IQApp?
 
@@ -81,6 +89,35 @@ final class GarminSyncManager: NSObject, ObservableObject {
         }
     }
 
+    /// Asks the watch to send its stored vault back to the phone. The watch
+    /// gates this behind an on-watch confirmation, then transmits the vault
+    /// string, which arrives via `receivedMessage(_:from:)`.
+    func requestVaultFromWatch() {
+        guard let device = selectedDevice else {
+            statusText = "Pick a Garmin device first."
+            selectDevice()
+            return
+        }
+        guard deviceConnected else {
+            statusText = "\(device.friendlyName ?? "Watch") not connected. Open Garmin Connect."
+            return
+        }
+        let app = iqApp ?? IQApp(uuid: appUUID, store: nil, device: device)
+        iqApp = app
+
+        // Listen for the watch's reply before asking for it.
+        ConnectIQ.sharedInstance().register(forAppMessages: app, delegate: self)
+
+        statusText = "Confirm the recovery prompt on your watch…"
+        ConnectIQ.sharedInstance().sendMessage(pullRequest, to: app, progress: nil) { [weak self] result in
+            DispatchQueue.main.async {
+                if result != .success {
+                    self?.statusText = "Couldn't reach watch: \(ConnectIQ.sharedInstance().log(forMessage: result) ?? "error")"
+                }
+            }
+        }
+    }
+
     // MARK: - Device binding / status
 
     private func bind(to device: IQDevice) {
@@ -129,6 +166,24 @@ extension GarminSyncManager: IQDeviceEventDelegate {
     func deviceStatusChanged(_ device: IQDevice, status: IQDeviceStatus) {
         DispatchQueue.main.async {
             self.deviceConnected = (status == .connected)
+        }
+    }
+}
+
+extension GarminSyncManager: IQAppMessagesDelegate {
+    /// The watch's reply to a recovery pull (the serialized vault string).
+    func receivedMessage(_ message: Any!, from app: IQApp!) {
+        let vaultString: String
+        if let s = message as? String {
+            vaultString = s
+        } else if let arr = message as? [Any], let s = arr.first as? String {
+            vaultString = s
+        } else {
+            vaultString = ""
+        }
+        ConnectIQ.sharedInstance().unregister(forAppMessages: app)
+        DispatchQueue.main.async { [weak self] in
+            self?.lastPulledVault = vaultString
         }
     }
 }

@@ -8,6 +8,12 @@ import Toybox.Communications;
 class SentryKeyApp extends Application.AppBase {
     private var view as SentryKeyView? = null;
 
+    // Sentinel the phone sends to request a watch -> phone recovery pull instead
+    // of pushing a vault. MUST stay in sync with the Android/iOS companions
+    // (GarminSyncManager pullRequest). A real Base32 secret can never produce
+    // this string, so it can't collide with a legitimate vault push.
+    private const PULL_REQUEST = "__SENTRYKEY_PULL__";
+
     function initialize() {
         AppBase.initialize();
     }
@@ -22,7 +28,20 @@ class SentryKeyApp extends Application.AppBase {
         try {
             var seedStr = mail.data;
             if (seedStr != null && seedStr instanceof Lang.String) {
-                var parsedData = parseVaultString(seedStr as String);
+                var str = seedStr as String;
+                // Recovery pull: the phone is asking the watch to send its vault
+                // back (e.g. after a lost/stolen phone). Gate it behind an
+                // on-watch confirmation so a stolen watch can't silently hand
+                // over every secret.
+                if (str.equals(PULL_REQUEST)) {
+                    WatchUi.pushView(
+                        new WatchUi.Confirmation("Send vault to phone?"),
+                        new PullConfirmDelegate(),
+                        WatchUi.SLIDE_IMMEDIATE
+                    );
+                    return;
+                }
+                var parsedData = parseVaultString(str);
                 Storage.setValue("vault", parsedData);
                 if (view != null) {
                     view.reloadVault();
@@ -32,6 +51,39 @@ class SentryKeyApp extends Application.AppBase {
         } catch (e) {
             // Prevent crashes from invalid data transmissions
         }
+    }
+
+    // Serializes the stored vault back into the "label:secret,label:secret" sync
+    // string and transmits it to the companion phone app. Called only after the
+    // user confirms the on-watch recovery prompt (PullConfirmDelegate).
+    function sendVaultToPhone() as Void {
+        var vault = null;
+        try {
+            vault = Storage.getValue("vault");
+        } catch (e) {
+            vault = null;
+        }
+        Communications.transmit(serializeVault(vault), null, new VaultTransmitListener());
+    }
+
+    private function serializeVault(vault as Lang.Object?) as String {
+        var out = "";
+        if (vault == null || !(vault instanceof Lang.Array)) {
+            return out;
+        }
+        var arr = vault as Array;
+        for (var i = 0; i < arr.size(); i++) {
+            var entry = arr[i] as Dictionary;
+            var label = entry["label"];
+            var secret = entry["secret"];
+            if (label != null && secret != null) {
+                if (out.length() > 0) {
+                    out = out + ",";
+                }
+                out = out + label + ":" + secret;
+            }
+        }
+        return out;
     }
 
     // onStop() is called when your application is exiting
@@ -152,4 +204,34 @@ class SentryKeyApp extends Application.AppBase {
 
 function getApp() as SentryKeyApp {
     return Application.getApp() as SentryKeyApp;
+}
+
+// Confirms an on-watch recovery request before any secrets leave the device.
+// Requires a physical button press on the watch itself.
+class PullConfirmDelegate extends WatchUi.ConfirmationDelegate {
+    function initialize() {
+        ConfirmationDelegate.initialize();
+    }
+
+    function onResponse(response as WatchUi.Confirm) as Boolean {
+        if (response == WatchUi.CONFIRM_YES) {
+            getApp().sendVaultToPhone();
+        }
+        return true;
+    }
+}
+
+// transmit() requires a ConnectionListener. Result reporting is the phone's job
+// (it knows whether the reply arrived via its own receive callback / timeout),
+// so these are intentionally silent.
+class VaultTransmitListener extends Communications.ConnectionListener {
+    function initialize() {
+        ConnectionListener.initialize();
+    }
+
+    function onComplete() as Void {
+    }
+
+    function onError() as Void {
+    }
 }

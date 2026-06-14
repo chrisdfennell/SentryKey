@@ -39,4 +39,24 @@ class VaultStorage(context: Context) {
     fun toVaultString(accounts: List<TwoFactorAccount>): String {
         return accounts.joinToString(",") { "${it.label}:${it.secret}" }
     }
+
+    // Parses the watch vault string "label:secret,label:secret". Each entry is
+    // split on its LAST colon (labels may contain colons; a Base32 secret never
+    // does), mirroring the watch's parseVaultString. Used by watch -> phone
+    // recovery.
+    fun fromVaultString(vaultString: String): List<TwoFactorAccount> {
+        val out = ArrayList<TwoFactorAccount>()
+        if (vaultString.isBlank()) return out
+        for (rawPair in vaultString.split(",")) {
+            val pair = rawPair.trim()
+            val colon = pair.lastIndexOf(':')
+            if (colon <= 0) continue
+            val label = pair.substring(0, colon).trim()
+            val secret = pair.substring(colon + 1).trim()
+            if (label.isNotEmpty() && secret.isNotEmpty()) {
+                out.add(TwoFactorAccount(label, secret))
+            }
+        }
+        return out
+    }
 }

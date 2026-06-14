@@ -287,6 +287,11 @@ fun SentryKeyDashboard(
     var scanResult by remember { mutableStateOf<String?>(null) }
     var scanResultError by remember { mutableStateOf(false) }
 
+    // Watch -> phone recovery (pull) modal state
+    var showRestoreWarning by remember { mutableStateOf(false) }
+    var restoreResult by remember { mutableStateOf<String?>(null) }
+    var restoreResultError by remember { mutableStateOf(false) }
+
     if (AUTO_UPDATE_TEST_MODE) {
         LaunchedEffect(Unit) {
             while (true) {
@@ -534,6 +539,81 @@ fun SentryKeyDashboard(
                 )
             }
 
+            // Restore-from-watch confirmation (pull is gated on the watch too)
+            if (showRestoreWarning) {
+                SentryModal(
+                    icon = "⌚",
+                    title = "Restore from watch",
+                    message = "This pulls the vault stored on your watch and merges any accounts you don't already have. You'll need to confirm the request on the watch itself.",
+                    confirmText = "Pull from watch",
+                    onConfirm = {
+                        showRestoreWarning = false
+                        syncStatus = "Requesting vault from watch…"
+                        syncStatusColor = Color(0xFFF97316)
+                        syncManager.requestVaultFromWatch(object : GarminSyncManager.RecoveryCallback {
+                            override fun onVaultReceived(vaultString: String) {
+                                (context as? android.app.Activity)?.runOnUiThread {
+                                    val pulled = vaultStorage.fromVaultString(vaultString)
+                                    if (pulled.isEmpty()) {
+                                        restoreResultError = true
+                                        restoreResult = "The watch sent an empty vault. Nothing to restore."
+                                        syncStatus = "Nothing to restore"
+                                        syncStatusColor = Color(0xFF8F93A3)
+                                        return@runOnUiThread
+                                    }
+                                    val fresh = pulled.filter { new ->
+                                        accounts.none { it.label == new.label && it.secret == new.secret }
+                                    }
+                                    if (fresh.isEmpty()) {
+                                        restoreResultError = false
+                                        restoreResult = "Your vault is already up to date — all ${pulled.size} account(s) from the watch are already here."
+                                    } else {
+                                        val merged = accounts + fresh
+                                        accounts = merged
+                                        vaultStorage.saveAccounts(merged)
+                                        restoreResultError = false
+                                        restoreResult = "Restored ${fresh.size} account(s) from your watch."
+                                    }
+                                    syncStatus = "Restored from watch"
+                                    syncStatusColor = Color(0xFF22C55E)
+                                }
+                            }
+
+                            override fun onError(error: String) {
+                                (context as? android.app.Activity)?.runOnUiThread {
+                                    restoreResultError = true
+                                    restoreResult = error
+                                    syncStatus = error
+                                    syncStatusColor = Color(0xFFEF4444)
+                                }
+                            }
+
+                            override fun onStatusUpdate(status: String) {
+                                (context as? android.app.Activity)?.runOnUiThread {
+                                    syncStatus = status
+                                    syncStatusColor = Color(0xFFF97316)
+                                }
+                            }
+                        })
+                    },
+                    onDismiss = { showRestoreWarning = false }
+                )
+            }
+
+            // Restore result (success / error)
+            restoreResult?.let { msg ->
+                SentryModal(
+                    icon = if (restoreResultError) "⚠️" else "✅",
+                    title = if (restoreResultError) "Restore failed" else "Restore complete",
+                    message = msg,
+                    confirmText = "OK",
+                    dismissText = null,
+                    confirmColor = if (restoreResultError) Color(0xFFEF4444) else Color(0xFFFFA500),
+                    onConfirm = { restoreResult = null },
+                    onDismiss = { restoreResult = null }
+                )
+            }
+
             // Styled scan result (success / error)
             scanResult?.let { msg ->
                 SentryModal(
@@ -626,6 +706,16 @@ fun SentryKeyDashboard(
                         ) {
                             Text("📋 Copy String", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
+                    }
+
+                    // Recover the vault FROM the watch (e.g. after losing this phone)
+                    Button(
+                        onClick = { showRestoreWarning = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("⌚ Restore from Watch", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
