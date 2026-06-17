@@ -66,15 +66,16 @@
         </div>
       </header>
 
-      <!-- Cloud Backup Directory Selector -->
+      <!-- Restore an older version (your latest vault loads automatically) -->
       <section class="backup-panel glass" id="cloud-backups-selector">
-        <h3>Cloud Backups on Disk</h3>
+        <h3>Restore an older backup</h3>
+        <p style="color: var(--text-secondary); font-size: 13px; margin: -4px 0 12px;">Your latest vault loads automatically. Use this to roll back to a previous version.</p>
         <div class="backup-list-select">
           <select id="backup-files-dropdown" class="backup-select">
-            <option value="">-- No backups found on server --</option>
+            <option value="">-- No backups on server yet --</option>
           </select>
           <button class="btn btn-secondary" id="btn-refresh-backups" title="Refresh List">🔄 Refresh</button>
-          <button class="btn btn-secondary" id="btn-load-backup">📥 Fetch & Load</button>
+          <button class="btn btn-secondary" id="btn-load-backup">📥 Restore</button>
         </div>
       </section>
 
@@ -86,13 +87,14 @@
         </div>
 
         <div class="sync-bar">
+          <span id="save-status" class="save-status" title="Changes save automatically"></span>
           <button class="btn btn-primary" id="btn-add-account" style="display: none;">➕ Add Account</button>
-          <button class="btn btn-secondary" id="btn-save-cloud" style="display: none;">💾 Sync to Cloud</button>
+          <button class="btn btn-secondary" id="btn-save-cloud" style="display: none;" title="Force a sync now">💾 Sync now</button>
           <button class="btn btn-secondary" id="btn-export-backup" style="display: none;">📤 Download File</button>
-          
-          <!-- Manual Local file upload -->
+
+          <!-- Manual Local file upload (import an external .skbackup) -->
           <label class="btn btn-secondary" id="lbl-upload-backup" style="cursor: pointer;">
-            📂 Load Local Backup
+            📂 Import File
             <input type="file" id="upload-backup-file-input" accept=".skbackup,.json" style="display: none;" />
           </label>
         </div>
@@ -120,9 +122,9 @@
         <!-- Dashboard Empty State -->
         <div class="empty-vault glass" id="empty-dashboard-state">
           <div class="empty-vault-icon">🔑</div>
-          <h3>Your vault is locked or empty</h3>
-          <p>Fetch a cloud backup from the dropdown above, load a local backup file, or start creating a new vault from scratch.</p>
-          <button class="btn btn-primary" id="btn-create-scratch">Create New Vault</button>
+          <h3>Your vault is empty</h3>
+          <p>Add your first account with the ➕ button above. Changes save to the cloud automatically.</p>
+          <button class="btn btn-primary" id="btn-create-scratch">Start a new vault</button>
         </div>
       </div>
 

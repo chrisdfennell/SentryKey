@@ -1005,3 +1005,17 @@ footer a {
   .cta-banner { flex-direction: column; text-align: center; align-items: stretch; }
   .lp-section { padding: 56px 0; }
 }
+
+/* Dashboard auto-save status */
+.save-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  align-self: center;
+  margin-right: auto;
+  min-width: 64px;
+  transition: color 0.2s ease;
+}
+.save-status[data-kind="saving"] { color: var(--orange); }
+.save-status[data-kind="ok"] { color: var(--green); }
+.save-status[data-kind="error"] { color: var(--red); }
