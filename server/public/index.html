@@ -4,15 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SentryKey — Your 2FA codes, on your wrist.</title>
-  <meta name="description" content="SentryKey is a self-contained TOTP two-factor authenticator for Garmin smartwatches with companion Android and iOS applications." />
+  <meta name="description" content="SentryKey is a self-contained TOTP two-factor authenticator for Garmin watches with Android and iOS companions, a home-screen widget, Wear OS support, and zero-knowledge encrypted cloud backup you can self-host." />
   <meta name="robots" content="index, follow" />
-  
-  <!-- SEO & Social Sharing Metadata -->
-  <meta property="og:title" content="SentryKey — Garmin TOTP Authenticator" />
-  <meta property="og:description" content="Read your rotating 2FA codes directly from your wrist. Standalone, secure, and client-side encrypted." />
+
+  <!-- SEO & Social Sharing -->
+  <meta property="og:title" content="SentryKey — Garmin TOTP Authenticator with Encrypted Cloud Backup" />
+  <meta property="og:description" content="Read your rotating 2FA codes from your wrist. Standalone, open source, and zero-knowledge encrypted. Self-host or use sentrykey.app." />
   <meta property="og:image" content="/assets/feature_graphic.png" />
   <meta property="og:type" content="website" />
-  
+  <meta property="og:url" content="https://sentrykey.app" />
+  <meta name="twitter:card" content="summary_large_image" />
+
   <link rel="icon" href="/assets/app_icon.png" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
@@ -31,58 +33,214 @@
         </svg>
         Sentry<span>Key</span>
       </a>
-      <div class="nav-links">
+      <div class="nav-links" style="display:flex; align-items:center; gap:22px;">
+        <a href="#features" style="color:var(--text-secondary);">Features</a>
+        <a href="#how" style="color:var(--text-secondary);">How it works</a>
+        <a href="#download" style="color:var(--text-secondary);">Download</a>
+        <a href="https://github.com/chrisdfennell/SentryKey" target="_blank" rel="noopener" style="color:var(--text-secondary);">GitHub</a>
         <a href="/dashboard.html" class="btn btn-primary" id="nav-btn-dashboard">Open Dashboard</a>
       </div>
     </div>
   </nav>
 
-  <!-- Hero Section -->
+  <!-- Hero -->
   <header class="hero">
     <div class="hero-glow"></div>
     <div class="container">
       <h1>Your 2FA codes,<br><span>on your wrist.</span></h1>
-      <p>SentryKey is a self-contained TOTP (two-factor authentication) authenticator for Garmin smartwatches, with Android and iOS companions. Generate codes directly on-device with zero dependencies.</p>
+      <p>A self-contained TOTP authenticator for Garmin watches — with Android &amp; iOS companions, a home-screen widget, Wear OS, and zero-knowledge encrypted cloud backup you fully control.</p>
       <div class="hero-actions">
-        <a href="/dashboard.html" class="btn btn-primary" id="hero-btn-dashboard">Launch Cloud Backup</a>
-        <a href="https://github.com/chrisdfennell/SentryKey" target="_blank" class="btn btn-secondary" id="hero-btn-github">GitHub Repository</a>
+        <a href="https://github.com/chrisdfennell/SentryKey/releases/latest" target="_blank" rel="noopener" class="btn btn-primary" id="hero-btn-download">⬇ Get the Android app</a>
+        <a href="/dashboard.html" class="btn btn-secondary" id="hero-btn-dashboard">Open Cloud Dashboard</a>
+      </div>
+      <div class="hero-meta">
+        <span><span class="dot"></span> Open source</span>
+        <span><span class="dot"></span> Zero-knowledge encryption</span>
+        <span><span class="dot"></span> Self-hostable</span>
       </div>
     </div>
   </header>
 
-  <!-- Product Showcase -->
+  <!-- Showcase -->
   <section class="container showcase">
-    <img src="/assets/feature_graphic.png" alt="SentryKey Watch and Mobile App Sync Mockup" class="showcase-img" id="showcase-graphic" />
+    <img src="/assets/feature_graphic.png" alt="SentryKey watch and mobile app sync mockup" class="showcase-img" id="showcase-graphic" />
   </section>
 
-  <!-- Features Grid -->
-  <section class="features">
+  <!-- Platforms -->
+  <section class="lp-section">
     <div class="container">
       <div class="section-header">
-        <h2>Features Designed for Security</h2>
-        <p>A simple, privacy-respecting structure that places your keys under your control.</p>
+        <h2>One vault, every device</h2>
+        <p>Add an account once and read your codes wherever you are.</p>
       </div>
-      
+      <div class="platforms">
+        <div class="platform glass">⌚ Garmin <small>Connect IQ</small></div>
+        <div class="platform glass">🤖 Android <span class="tag live">Live</span></div>
+        <div class="platform glass">🍎 iOS <span class="tag soon">Soon</span></div>
+        <div class="platform glass">⌚ Wear OS <small>Galaxy / Pixel</small></div>
+        <div class="platform glass">🌐 Web dashboard <span class="tag live">Live</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Built for security &amp; convenience</h2>
+        <p>Your keys, under your control — with none of the friction.</p>
+      </div>
       <div class="feature-grid">
-        <!-- Feature 1 -->
         <div class="feature-card glass">
           <span class="feature-icon">⌚</span>
-          <h3>Standalone Watch Authenticator</h3>
-          <p>Rotating 2FA codes are generated entirely on-device on your Garmin watch. No phone is required after your initial sync.</p>
+          <h3>Standalone watch authenticator</h3>
+          <p>RFC 6238 TOTP codes are generated on your Garmin watch itself. No phone required after the first sync.</p>
         </div>
-
-        <!-- Feature 2 -->
         <div class="feature-card glass">
           <span class="feature-icon">🔐</span>
-          <h3>Zero-Knowledge Cloud Backup</h3>
-          <p>Back up your credentials to your own VPS. All data is encrypted client-side in the browser. The server never sees your raw secrets.</p>
+          <h3>Zero-knowledge cloud backup</h3>
+          <p>Back up to your own server (or sentrykey.app). Everything is encrypted in your browser/app — the server only ever stores ciphertext.</p>
         </div>
-
-        <!-- Feature 3 -->
         <div class="feature-card glass">
           <span class="feature-icon">🔄</span>
-          <h3>One-Tap Bluetooth Sync</h3>
-          <p>Add accounts on your phone companion, and push them instantly to your watch over BLE using the Garmin Connect IQ SDK.</p>
+          <h3>Frictionless auto-sync</h3>
+          <p>Change a code on your phone and it syncs to your watch and your cloud backup automatically — no buttons to remember.</p>
+        </div>
+        <div class="feature-card glass">
+          <span class="feature-icon">📲</span>
+          <h3>Home-screen widget</h3>
+          <p>Tap-to-reveal codes right on your Android home screen — hidden by default so a glance never exposes them.</p>
+        </div>
+        <div class="feature-card glass">
+          <span class="feature-icon">🧭</span>
+          <h3>Wear OS &amp; more</h3>
+          <p>Codes on Galaxy Watch and Pixel Watch too. One vault spans Garmin, Wear OS, phone, and the web.</p>
+        </div>
+        <div class="feature-card glass">
+          <span class="feature-icon">📦</span>
+          <h3>Open standards</h3>
+          <p>Import from Google Authenticator and any <code>otpauth://</code> source. Export anytime. No lock-in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="lp-section alt" id="how">
+    <div class="container">
+      <div class="section-header">
+        <h2>How it works</h2>
+        <p>Three steps. Then it just works.</p>
+      </div>
+      <div class="steps">
+        <div class="step glass">
+          <div class="step-num">1</div>
+          <h3>Scan on your phone</h3>
+          <p>Add your 2FA accounts by scanning their QR codes in the companion app.</p>
+        </div>
+        <div class="step glass">
+          <div class="step-num">2</div>
+          <h3>It syncs, encrypted</h3>
+          <p>Your vault flows to your watch over Bluetooth and to your cloud backup — encrypted end-to-end.</p>
+        </div>
+        <div class="step glass">
+          <div class="step-num">3</div>
+          <h3>Read codes anywhere</h3>
+          <p>From your wrist, the widget, or the web dashboard — even with no phone nearby.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <section class="lp-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>True zero-knowledge</h2>
+        <p>Your master password never leaves your device.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card glass">
+          <span class="feature-icon">🧠</span>
+          <h3>Keys derived locally</h3>
+          <p>Your username + master password derive a login key and a separate encryption key on-device (PBKDF2 + HMAC). The server only sees the login hash.</p>
+        </div>
+        <div class="feature-card glass">
+          <span class="feature-icon">🔒</span>
+          <h3>Encrypted before it leaves</h3>
+          <p>Vaults are sealed with AES-256-GCM before upload. We literally cannot read your secrets — and neither can anyone who breaches the server.</p>
+        </div>
+        <div class="feature-card glass">
+          <span class="feature-icon">📖</span>
+          <h3>No tracking, no servers required</h3>
+          <p>No accounts needed to use the apps offline. No analytics. Read the <a href="/privacy.html">privacy policy</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Self-host -->
+  <section class="lp-section alt">
+    <div class="container">
+      <div class="cta-banner glass">
+        <div>
+          <h2>Run your own server 🏠</h2>
+          <p>SentryKey's backup server is open source and ships with a one-command Docker + automatic-HTTPS deploy. Keep your vault entirely on infrastructure you own — self-hosting is free, forever.</p>
+        </div>
+        <a href="https://github.com/chrisdfennell/SentryKey/tree/main/server" target="_blank" rel="noopener" class="btn btn-secondary">Self-host guide</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="lp-section" id="download">
+    <div class="container">
+      <div class="section-header">
+        <h2>Get SentryKey</h2>
+        <p>Free and open source. More stores coming soon.</p>
+      </div>
+      <div class="download-grid">
+        <a href="https://github.com/chrisdfennell/SentryKey/releases/latest" target="_blank" rel="noopener" class="store-btn glass">
+          <span class="icon">🤖</span>
+          <span>
+            <div class="store-main">Android APK</div>
+            <div class="store-sub">Download from GitHub Releases</div>
+          </span>
+        </a>
+        <a href="/dashboard.html" class="store-btn glass">
+          <span class="icon">🌐</span>
+          <span>
+            <div class="store-main">Web Dashboard</div>
+            <div class="store-sub">Open in your browser</div>
+          </span>
+        </a>
+        <a href="https://github.com/chrisdfennell/SentryKey" target="_blank" rel="noopener" class="store-btn glass">
+          <span class="icon">⭐</span>
+          <span>
+            <div class="store-main">Source on GitHub</div>
+            <div class="store-sub">Star, fork, self-host</div>
+          </span>
+        </a>
+        <div class="store-btn glass soon">
+          <span class="icon">▶️</span>
+          <span>
+            <div class="store-main">Google Play</div>
+            <div class="store-sub">Coming soon</div>
+          </span>
+        </div>
+        <div class="store-btn glass soon">
+          <span class="icon">🍎</span>
+          <span>
+            <div class="store-main">App Store</div>
+            <div class="store-sub">Coming soon</div>
+          </span>
+        </div>
+        <div class="store-btn glass soon">
+          <span class="icon">⌚</span>
+          <span>
+            <div class="store-main">Garmin Connect IQ</div>
+            <div class="store-sub">Coming soon</div>
+          </span>
         </div>
       </div>
     </div>
@@ -94,7 +252,8 @@
       <p>© 2026 SentryKey. Built for security, made for the wrist.</p>
       <div>
         <a href="/privacy.html" id="footer-link-privacy">Privacy Policy</a>
-        <a href="https://github.com/chrisdfennell/SentryKey" target="_blank" id="footer-link-source">Source Code</a>
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="https://github.com/chrisdfennell/SentryKey" target="_blank" rel="noopener" id="footer-link-source">Source Code</a>
       </div>
     </div>
   </footer>

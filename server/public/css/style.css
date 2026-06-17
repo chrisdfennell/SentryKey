@@ -910,3 +910,98 @@ footer a {
     align-items: stretch;
   }
 }
+
+/* ============================================================
+   Landing page sections (added)
+   ============================================================ */
+.lp-section { padding: 84px 0; }
+.lp-section.alt { background: rgba(255, 255, 255, 0.015); }
+
+.tag {
+  display: inline-block;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.tag.live { color: var(--green); background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); }
+.tag.soon { color: var(--text-secondary); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--card-border); }
+
+.hero-meta {
+  margin-top: 22px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.hero-meta span { display: inline-flex; align-items: center; gap: 7px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); display: inline-block; }
+
+/* Platform strip */
+.platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+.platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.platform small { color: var(--text-secondary); font-weight: 500; }
+
+/* How it works */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.step { padding: 28px 24px; border-radius: 16px; }
+.step-num {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Outfit', sans-serif; font-weight: 800;
+  background: var(--orange-gradient); color: #07080B; margin-bottom: 14px;
+}
+.step h3 { font-size: 18px; margin-bottom: 8px; }
+.step p { color: var(--text-secondary); font-size: 14px; }
+
+/* Download grid */
+.download-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.store-btn {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px; border-radius: 14px; text-align: left;
+  color: var(--text-primary); transition: all 0.25s ease;
+}
+.store-btn:hover { transform: translateY(-3px); border-color: var(--orange); text-shadow: none; }
+.store-btn .icon { font-size: 26px; }
+.store-btn .store-main { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 15px; }
+.store-btn .store-sub { color: var(--text-secondary); font-size: 12px; }
+.store-btn.soon { opacity: 0.6; cursor: default; pointer-events: none; }
+
+/* Self-host CTA banner */
+.cta-banner {
+  border-radius: 20px;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid var(--card-border-active);
+}
+.cta-banner h2 { font-size: 1.6rem; margin-bottom: 8px; }
+.cta-banner p { color: var(--text-secondary); max-width: 560px; }
+
+@media (max-width: 820px) {
+  .steps, .download-grid { grid-template-columns: 1fr; }
+  .cta-banner { flex-direction: column; text-align: center; align-items: stretch; }
+  .lp-section { padding: 56px 0; }
+}
