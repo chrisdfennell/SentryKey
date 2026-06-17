@@ -247,18 +247,21 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             SentryKeyTheme {
+                // Biometric lock (if enabled) → cloud login (if not signed in) → app.
                 AppLockGate {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        containerColor = Color(0xFF07080B)
-                    ) { innerPadding ->
-                        SentryKeyDashboard(
-                            vaultStorage = vaultStorage,
-                            syncManager = syncManager,
-                            clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
-                            context = this,
-                            modifier = Modifier.padding(innerPadding)
-                        )
+                    CloudAuthGate {
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            containerColor = Color(0xFF07080B)
+                        ) { innerPadding ->
+                            SentryKeyDashboard(
+                                vaultStorage = vaultStorage,
+                                syncManager = syncManager,
+                                clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
+                                context = this,
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
                     }
                 }
             }
@@ -327,8 +330,9 @@ fun SentryKeyDashboard(
     // Cloud backup dialog state
     var showCloudBackup by remember { mutableStateOf(false) }
 
-    // First-run onboarding
-    var showOnboarding by remember { mutableStateOf(!vaultStorage.isOnboarded()) }
+    // First-run onboarding — superseded by the startup CloudAuthGate login screen;
+    // kept available (OnboardingDialog) but no longer auto-shown.
+    var showOnboarding by remember { mutableStateOf(false) }
 
     // Auto-sync: silently back up to cloud + push to watch after any vault change.
     val autoSync = remember {

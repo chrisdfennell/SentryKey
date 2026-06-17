@@ -165,6 +165,12 @@ class VaultStorage(context: Context) {
     fun isOnboarded(): Boolean = prefs.getBoolean(onboardedKey, false)
     fun setOnboarded(done: Boolean) { prefs.edit().putBoolean(onboardedKey, done).apply() }
 
+    // Whether the user chose "use without cloud" at the startup login gate, so we
+    // don't keep prompting. Reset on sign-out so signing out re-prompts next launch.
+    private val cloudOfflineKey = "cloud_offline_chosen"
+    fun isCloudGateDismissed(): Boolean = prefs.getBoolean(cloudOfflineKey, false)
+    fun setCloudGateDismissed(dismissed: Boolean) { prefs.edit().putBoolean(cloudOfflineKey, dismissed).apply() }
+
     /** Hash of the vault at last successful cloud backup — lets background sync skip no-op uploads. */
     fun getLastSyncHash(): String = prefs.getString(lastSyncHashKey, "") ?: ""
     fun setLastSyncHash(hash: String) { prefs.edit().putString(lastSyncHashKey, hash).apply() }
