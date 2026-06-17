@@ -32,9 +32,49 @@ final class GarminSyncManager: NSObject, ObservableObject {
     /// observes this, merges, then clears it back to nil.
     @Published var lastPulledVault: String?
 
+    /// True when a sync passphrase is configured (drives UI + encryption).
+    @Published var syncEncryptionEnabled: Bool = false
+
     private var iqApp: IQApp?
 
-    private override init() { super.init() }
+    private override init() {
+        super.init()
+        syncEncryptionEnabled = !getSyncPassphrase().isEmpty
+    }
+
+    // MARK: - Optional sync passphrase (Keychain)
+
+    private let passService = "com.sentrykey.syncpass"
+    private let passKey = "passphrase"
+
+    func getSyncPassphrase() -> String {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: passService,
+            kSecAttrAccount as String: passKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data, let s = String(data: data, encoding: .utf8) else { return "" }
+        return s
+    }
+
+    func setSyncPassphrase(_ passphrase: String) {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: passService,
+            kSecAttrAccount as String: passKey
+        ]
+        SecItemDelete(query as CFDictionary)
+        if !passphrase.isEmpty {
+            query[kSecValueData as String] = Data(passphrase.utf8)
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            SecItemAdd(query as CFDictionary, nil)
+        }
+        syncEncryptionEnabled = !passphrase.isEmpty
+    }
 
     /// Call once at app launch (e.g. from the App initializer).
     func start() {
@@ -73,9 +113,14 @@ final class GarminSyncManager: NSObject, ObservableObject {
         let app = iqApp ?? IQApp(uuid: appUUID, store: nil, device: device)
         iqApp = app
 
+        // Encrypt the BLE payload if a sync passphrase is set (watch decrypts
+        // with the same passphrase). Otherwise send plaintext (legacy).
+        let pass = getSyncPassphrase()
+        let payload = pass.isEmpty ? vaultString : SyncCrypto.encrypt(vaultString, passphrase: pass)
+
         statusText = "Sending vault to \(device.friendlyName ?? "watch")…"
         ConnectIQ.sharedInstance().sendMessage(
-            vaultString,
+            payload,
             to: app,
             progress: nil
         ) { [weak self] result in
@@ -183,7 +228,17 @@ extension GarminSyncManager: IQAppMessagesDelegate {
         }
         ConnectIQ.sharedInstance().unregister(forAppMessages: app)
         DispatchQueue.main.async { [weak self] in
-            self?.lastPulledVault = vaultString
+            guard let self else { return }
+            // The watch encrypts its reply when a sync passphrase is set.
+            if SyncCrypto.isEncrypted(vaultString) {
+                guard let decrypted = SyncCrypto.decrypt(vaultString, passphrase: self.getSyncPassphrase()) else {
+                    self.statusText = "Watch sent an encrypted vault — set the matching sync passphrase and retry."
+                    return
+                }
+                self.lastPulledVault = decrypted
+            } else {
+                self.lastPulledVault = vaultString
+            }
         }
     }
 }

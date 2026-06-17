@@ -24,7 +24,8 @@
 - 📷 **QR scanning** — add accounts by scanning `otpauth://` QR codes on your phone.
 - 🔄 **One-tap Bluetooth sync** — push your vault from phone to watch via the Garmin Connect IQ SDK.
 - 🎨 **Premium dark UI** — black background, brand-orange countdown ring that turns red in the final 5 seconds, auto-fitting account labels, and multi-account page dots.
-- 🗄️ **Persistent & secure** — vault survives watch restarts; phone secrets live in Android Keystore-backed prefs / iOS Keychain.
+- 🗄️ **Persistent & secure** — vault survives watch restarts; phone secrets are encrypted at rest (Android Keystore AES-256-GCM / iOS Keychain).
+- 🔑 **Encrypted backups** — export a passphrase-locked backup (PBKDF2 + AES-256-GCM) that's useless without the passphrase; plaintext export still available with a warning.
 
 ---
 
@@ -97,11 +98,23 @@ Requires the [Connect IQ SDK](https://developer.garmin.com/connect-iq/sdk/) and 
 
 ### Android companion
 
+The Android app ships in two **distribution flavors** that differ only in how
+they self-update:
+
+| Flavor | Update mechanism | Goes to |
+|---|---|---|
+| `play` | Google Play In-App Updates (no install permission) | Google Play |
+| `github` | Self-installs the APK from GitHub Releases (sideload) | GitHub Releases |
+
 ```bash
 cd companion
-./gradlew assembleDebug
-# → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleGithubDebug   # sideload build → app/build/outputs/apk/github/debug/
+./gradlew assemblePlayDebug     # Play build (uses Play In-App Updates)
 ```
+
+Only the `github` flavor carries the `REQUEST_INSTALL_PACKAGES` permission, so
+the Play upload stays clean. CI builds and publishes the `github` flavor to
+GitHub Releases.
 
 ### iOS companion
 
@@ -123,9 +136,22 @@ git push origin v1.0.0-beta.x
 
 ## 🔒 Security notes
 
-- TOTP secrets are sensitive. On iOS they're stored in the **Keychain**; on the
-  watch they live in app **Storage**. Treat the `label:secret` sync string as
-  secret material — it grants the same access as the QR codes themselves.
+- TOTP secrets are sensitive. On **Android** the vault is encrypted at rest with
+  an AES-256-GCM key held in the **Android Keystore** (hardware-backed where the
+  device supports it); on **iOS** they're stored in the **Keychain**. On the
+  **watch** they live in app **Storage** in plaintext (Connect IQ has no keystore).
+- **Backups** can be exported encrypted: the passphrase is stretched with
+  PBKDF2-HMAC-SHA256 (210k iterations) and the vault sealed with AES-256-GCM.
+  There's no passphrase recovery — lose it and the backup is gone. A plaintext
+  JSON/`otpauth` export is still available behind an explicit warning for moving
+  accounts to other authenticators.
+- The `label:secret` BLE **sync string** can optionally be encrypted end-to-end:
+  set a **sync passphrase** in the phone app and the same passphrase in the
+  watch's Connect IQ settings. The payload is then sealed with an HMAC-SHA1-based
+  passphrase scheme (PBKDF2 → keystream + MAC, marker `SKENC1:`) that all three
+  platforms implement from the same primitive. With no passphrase set, sync stays
+  plaintext (and should be treated as secret material). This is defense-in-depth
+  over an already-link-encrypted BLE channel, not an audited protocol.
 - This is a personal/hobby project, **not** a security-audited product. Keep a
   backup of your 2FA secrets elsewhere.
 

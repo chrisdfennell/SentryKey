@@ -2,4 +2,6 @@
     <string id="AppName">SentryKey</string>
     <string id="cryptoSeedsTitle">Encrypted 2FA Vault String</string>
     <string id="cryptoSeedsDesc">Paste a comma-separated string of label:secret pairs. Example: GitHub:JBSWY3DPEHPK3PXP,NAS:KVKVE43VPTLYTRK7</string>
+    <string id="syncPassphraseTitle">Sync Passphrase (optional)</string>
+    <string id="syncPassphraseDesc">If set, the phone must use the SAME passphrase to sync. Encrypts the vault sent over Bluetooth. Leave blank for unencrypted sync.</string>
 </strings>

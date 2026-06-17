@@ -1,3 +1,4 @@
 <properties>
     <property id="cryptoSeeds" type="string"></property>
+    <property id="syncPassphrase" type="string"></property>
 </properties>

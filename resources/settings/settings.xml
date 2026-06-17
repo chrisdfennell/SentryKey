@@ -2,4 +2,7 @@
     <setting propertyKey="@Properties.cryptoSeeds" title="@Strings.cryptoSeedsTitle" prompt="@Strings.cryptoSeedsTitle">
         <settingConfig type="alphaNumeric" maxLength="500" />
     </setting>
+    <setting propertyKey="@Properties.syncPassphrase" title="@Strings.syncPassphraseTitle" prompt="@Strings.syncPassphraseDesc">
+        <settingConfig type="alphaNumeric" maxLength="128" />
+    </setting>
 </settings>

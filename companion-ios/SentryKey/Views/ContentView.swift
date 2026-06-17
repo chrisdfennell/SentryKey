@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 private let brandOrange = Color(red: 1.0, green: 0.647, blue: 0.0) // #FFA500
@@ -17,6 +18,23 @@ struct ContentView: View {
     @State private var importing = false
     @State private var restoreMessage: String?
     @AppStorage("app_lock_enabled") private var appLockEnabled = false
+
+    // Encrypted export: collect a passphrase, then share the encrypted file.
+    @State private var showEncryptExport = false
+    @State private var exportPassword = ""
+    @State private var exportConfirm = ""
+    @State private var shareItem: ShareItem?
+
+    // Encrypted import: hold the picked ciphertext until a passphrase arrives.
+    @State private var pendingEncryptedText: String?
+    @State private var importPassword = ""
+
+    // Generic error surface (bad passphrase, invalid export passphrase, …).
+    @State private var errorMessage: String?
+
+    // Optional BLE sync passphrase.
+    @State private var showSyncPass = false
+    @State private var syncPassInput = ""
 
     private var filtered: [TwoFactorAccount] {
         search.isEmpty ? vault.accounts
@@ -64,10 +82,25 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        ShareLink("Export vault", item: VaultExportImport.exportFile(vault.accounts) ?? URL(fileURLWithPath: "/dev/null"))
+                        Button {
+                            exportPassword = ""; exportConfirm = ""
+                            showEncryptExport = true
+                        } label: { Label("Export (encrypted)", systemImage: "lock.doc") }
+                        ShareLink(item: VaultExportImport.exportFile(vault.accounts) ?? URL(fileURLWithPath: "/dev/null")) {
+                            Label("Export (plaintext)", systemImage: "doc")
+                        }
                         Button {
                             importing = true
                         } label: { Label("Import vault", systemImage: "square.and.arrow.down") }
+                        Button {
+                            syncPassInput = sync.getSyncPassphrase()
+                            showSyncPass = true
+                        } label: {
+                            Label(
+                                sync.syncEncryptionEnabled ? "Sync encryption: ON" : "Sync encryption: off",
+                                systemImage: sync.syncEncryptionEnabled ? "lock.fill" : "lock.open"
+                            )
+                        }
                         Toggle(isOn: $appLockEnabled) {
                             Label("App lock (Face ID)", systemImage: "faceid")
                         }
@@ -89,7 +122,8 @@ struct ContentView: View {
             }
             .fileImporter(
                 isPresented: $importing,
-                allowedContentTypes: [.json, .plainText, .text],
+                // .data so encrypted .skbackup files (any extension) are pickable too.
+                allowedContentTypes: [.json, .plainText, .text, .data],
                 allowsMultipleSelection: false
             ) { result in
                 handleImport(result)
@@ -123,6 +157,72 @@ struct ContentView: View {
         } message: {
             Text(restoreMessage ?? "")
         }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(url: item.url)
+        }
+        .alert("Set backup passphrase", isPresented: $showEncryptExport) {
+            SecureField("Passphrase", text: $exportPassword)
+            SecureField("Confirm passphrase", text: $exportConfirm)
+            Button("Cancel", role: .cancel) { exportPassword = ""; exportConfirm = "" }
+            Button("Export") { startEncryptedExport() }
+        } message: {
+            Text("At least 6 characters. There's no way to recover a lost passphrase.")
+        }
+        .alert(
+            "Enter backup passphrase",
+            isPresented: Binding(get: { pendingEncryptedText != nil }, set: { if !$0 { pendingEncryptedText = nil; importPassword = "" } })
+        ) {
+            SecureField("Passphrase", text: $importPassword)
+            Button("Cancel", role: .cancel) { pendingEncryptedText = nil; importPassword = "" }
+            Button("Import") { finishEncryptedImport() }
+        } message: {
+            Text("This backup is encrypted. Enter its passphrase to import.")
+        }
+        .alert(
+            "Couldn't complete",
+            isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+        .alert("Sync passphrase", isPresented: $showSyncPass) {
+            SecureField("Passphrase", text: $syncPassInput)
+            Button("Cancel", role: .cancel) { syncPassInput = "" }
+            Button("Save") {
+                sync.setSyncPassphrase(syncPassInput.trimmingCharacters(in: .whitespaces))
+                syncPassInput = ""
+            }
+        } message: {
+            Text("Encrypts the vault sent over Bluetooth. Enter the SAME passphrase in the watch's app settings (Garmin Connect → SentryKey → Settings). Leave blank to disable.")
+        }
+    }
+
+    private func startEncryptedExport() {
+        let pw = exportPassword
+        let confirm = exportConfirm
+        exportPassword = ""; exportConfirm = ""
+        guard pw.count >= 6 else { errorMessage = "Passphrase must be at least 6 characters."; return }
+        guard pw == confirm else { errorMessage = "Passphrases don't match."; return }
+        guard let url = VaultExportImport.exportEncryptedFile(vault.accounts, password: pw) else {
+            errorMessage = "Couldn't create the encrypted backup."; return
+        }
+        shareItem = ShareItem(url: url)
+    }
+
+    private func finishEncryptedImport() {
+        guard let text = pendingEncryptedText else { return }
+        let pw = importPassword
+        pendingEncryptedText = nil; importPassword = ""
+        do {
+            let imported = try VaultExportImport.parseEncryptedImport(text, password: pw)
+            for account in imported
+            where !vault.accounts.contains(where: { $0.label == account.label && $0.secret == account.secret }) {
+                vault.add(account)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -130,6 +230,10 @@ struct ContentView: View {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        if VaultExportImport.isEncryptedBackup(text) {
+            pendingEncryptedText = text
+            return
+        }
         for account in VaultExportImport.parseImport(text)
         where !vault.accounts.contains(where: { $0.label == account.label && $0.secret == account.secret }) {
             vault.add(account)
@@ -201,4 +305,19 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
     }
+}
+
+/// Identifiable wrapper so a generated file URL can drive a `.sheet(item:)`.
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// Minimal UIActivityViewController bridge for sharing a generated backup file.
+struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

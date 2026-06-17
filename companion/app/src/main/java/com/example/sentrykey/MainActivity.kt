@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -218,6 +219,12 @@ class MainActivity : FragmentActivity() {
         vaultStorage = VaultStorage(this)
         syncManager = GarminSyncManager(this)
 
+        // play flavor: Google Play In-App Updates. github flavor: no-op here —
+        // it updates from GitHub Releases via the banner in the dashboard.
+        if (BuildConfig.USE_PLAY_UPDATES) {
+            PlayUpdater.checkForUpdate(this)
+        }
+
         setContent {
             SentryKeyTheme {
                 AppLockGate {
@@ -292,16 +299,23 @@ fun SentryKeyDashboard(
     var restoreResult by remember { mutableStateOf<String?>(null) }
     var restoreResultError by remember { mutableStateOf(false) }
 
-    if (AUTO_UPDATE_TEST_MODE) {
+    // Optional BLE sync passphrase state
+    var showSyncPassDialog by remember { mutableStateOf(false) }
+    var syncPassInput by remember { mutableStateOf("") }
+    var syncPassSet by remember { mutableStateOf(vaultStorage.getSyncPassphrase().isNotEmpty()) }
+
+    if (GITHUB_UPDATES) {
         LaunchedEffect(Unit) {
-            while (true) {
+            // Release github builds check once on launch; debug builds keep
+            // polling so a freshly-published test release shows up quickly.
+            do {
                 val info = UpdateManager.fetchLatest()
                 if (info?.apkUrl != null && info.tag != BuildConfig.RELEASE_TAG) {
                     updateTag = info.tag
                     updateUrl = info.apkUrl
                 }
-                delay(UPDATE_POLL_SECONDS * 1000)
-            }
+                if (BuildConfig.DEBUG) delay(UPDATE_POLL_SECONDS * 1000)
+            } while (BuildConfig.DEBUG)
         }
     }
 
@@ -553,7 +567,21 @@ fun SentryKeyDashboard(
                         syncManager.requestVaultFromWatch(object : GarminSyncManager.RecoveryCallback {
                             override fun onVaultReceived(vaultString: String) {
                                 (context as? android.app.Activity)?.runOnUiThread {
-                                    val pulled = vaultStorage.fromVaultString(vaultString)
+                                    // The watch encrypts its reply when a sync passphrase is set.
+                                    val decoded = if (SyncCrypto.isEncrypted(vaultString)) {
+                                        try {
+                                            SyncCrypto.decrypt(vaultString, vaultStorage.getSyncPassphrase())
+                                        } catch (e: BadPasswordException) {
+                                            restoreResultError = true
+                                            restoreResult = "The watch sent an encrypted vault, but the sync passphrase is missing or wrong. Set the matching passphrase and try again."
+                                            syncStatus = "Wrong sync passphrase"
+                                            syncStatusColor = Color(0xFFEF4444)
+                                            return@runOnUiThread
+                                        }
+                                    } else {
+                                        vaultString
+                                    }
+                                    val pulled = vaultStorage.fromVaultString(decoded)
                                     if (pulled.isEmpty()) {
                                         restoreResultError = true
                                         restoreResult = "The watch sent an empty vault. Nothing to restore."
@@ -666,7 +694,11 @@ fun SentryKeyDashboard(
                     ) {
                         Button(
                             onClick = {
-                                val vaultStr = vaultStorage.toVaultString(accounts)
+                                val raw = vaultStorage.toVaultString(accounts)
+                                // Encrypt the BLE payload if a sync passphrase is set
+                                // (watch decrypts with the same passphrase); else plaintext.
+                                val syncPass = vaultStorage.getSyncPassphrase()
+                                val vaultStr = if (syncPass.isNotEmpty()) SyncCrypto.encrypt(raw, syncPass) else raw
                                 syncManager.syncVault(vaultStr, object : GarminSyncManager.SyncCallback {
                                     override fun onSuccess(message: String) {
                                         syncStatus = message
@@ -717,7 +749,74 @@ fun SentryKeyDashboard(
                     ) {
                         Text("⌚ Restore from Watch", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
+
+                    // Optional end-to-end encryption for the BLE sync payload.
+                    TextButton(
+                        onClick = {
+                            syncPassInput = vaultStorage.getSyncPassphrase()
+                            showSyncPassDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (syncPassSet) "🔒 Sync encryption: ON" else "🔓 Sync encryption: off",
+                            color = if (syncPassSet) Color(0xFF22C55E) else Color(0xFF8F93A3),
+                            fontSize = 12.sp
+                        )
+                    }
                 }
+            }
+
+            if (showSyncPassDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSyncPassDialog = false },
+                    containerColor = Color(0xFF10121A),
+                    title = { Text("Sync passphrase", color = Color.White) },
+                    text = {
+                        Column {
+                            Text(
+                                "Set a passphrase to encrypt the vault sent over Bluetooth. Enter the SAME passphrase in the watch's app settings (Garmin Connect → SentryKey → Settings). Leave blank to disable.",
+                                color = Color(0xFF8F93A3),
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = syncPassInput,
+                                onValueChange = { syncPassInput = it },
+                                placeholder = { Text("Passphrase", color = Color(0xFF5A5F7A)) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color(0xFF10121A),
+                                    unfocusedContainerColor = Color(0xFF10121A),
+                                    focusedBorderColor = Color(0xFFFFA500),
+                                    unfocusedBorderColor = Color(0xFF222533),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val p = syncPassInput.trim()
+                            vaultStorage.setSyncPassphrase(p)
+                            syncPassSet = p.isNotEmpty()
+                            showSyncPassDialog = false
+                            Toast.makeText(
+                                context,
+                                if (p.isEmpty()) "Sync encryption disabled" else "Sync encryption enabled",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }) { Text("Save", color = Color(0xFFFFA500)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSyncPassDialog = false }) {
+                            Text("Cancel", color = Color(0xFF8F93A3))
+                        }
+                    }
+                )
             }
 
             // Export / Import (otpauth standard) — interop with other authenticators

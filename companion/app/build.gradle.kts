@@ -14,7 +14,7 @@ android {
     defaultConfig {
         // Public Play Store identity (must not be com.example.*). Kept distinct
         // from the code `namespace` above, which Play does not see.
-        applicationId = "com.chrisdfennell.sentrykey"
+        applicationId = "com.fennell.sentrykey"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -27,6 +27,23 @@ android {
         buildConfigField("String", "RELEASE_TAG", "\"$releaseTag\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Distribution channel decides the update mechanism:
+    //  - play:   Google Play In-App Updates (no APK self-install permission)
+    //  - github: self-updating APK from GitHub Releases (sideload)
+    // The same code is built twice; upload the `play` APK/AAB to Play and attach
+    // the `github` APK to GitHub Releases.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "USE_PLAY_UPDATES", "true")
+        }
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "USE_PLAY_UPDATES", "false")
+        }
     }
 
     signingConfigs {
@@ -62,6 +79,8 @@ android {
 
 dependencies {
     implementation("com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar")
+    // Play In-App Updates — only linked into the `play` flavor.
+    "playImplementation"("com.google.android.play:app-update-ktx:2.1.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("sh.calvin.reorderable:reorderable:2.4.3")
