@@ -112,6 +112,7 @@ dependencies {
     implementation("sh.calvin.reorderable:reorderable:2.4.3")
     implementation(libs.play.services.code.scanner)
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation(libs.coil.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

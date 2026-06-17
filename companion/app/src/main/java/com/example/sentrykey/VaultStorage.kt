@@ -88,14 +88,18 @@ class VaultStorage(context: Context) {
         edit.apply()
     }
 
-    // ---- Cloud backup account (convenience prefill; secrets never persisted) ----
-    // We store the server URL + username for prefill and the session token so the
-    // user stays "logged in". The master password / encKey are NEVER persisted —
-    // they're entered per session and kept only in memory.
+    // ---- Cloud backup account (stay-signed-in) ----
+    // Server URL + username (prefill), the session token, AND the derived vault
+    // encryption key are persisted so auto-backup can run silently. The token and
+    // encKey are wrapped by the Android Keystore (CryptoManager). The master
+    // PASSWORD itself is still never stored — only the derived encKey.
 
     private val cloudUrlKey = "cloud_url"
     private val cloudUserKey = "cloud_user"
     private val cloudTokenKey = "cloud_token_enc"
+    private val cloudEncKeyKey = "cloud_enckey_enc"
+    private val onboardedKey = "onboarded"
+    private val lastSyncHashKey = "cloud_last_sync_hash"
 
     fun getCloudServerUrl(): String =
         prefs.getString(cloudUrlKey, null) ?: CloudBackupClient.DEFAULT_SERVER_URL
@@ -125,6 +129,45 @@ class VaultStorage(context: Context) {
         else edit.putString(cloudTokenKey, CryptoManager.encrypt(token))
         edit.apply()
     }
+
+    /** The persisted vault encryption key (Keystore-wrapped), or null if signed out. */
+    fun getCloudEncKey(): ByteArray? {
+        val blob = prefs.getString(cloudEncKeyKey, null) ?: return null
+        return try {
+            android.util.Base64.decode(CryptoManager.decrypt(blob), android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun setCloudEncKey(encKey: ByteArray?) {
+        val edit = prefs.edit()
+        if (encKey == null) {
+            edit.remove(cloudEncKeyKey)
+        } else {
+            val b64 = android.util.Base64.encodeToString(encKey, android.util.Base64.NO_WRAP)
+            edit.putString(cloudEncKeyKey, CryptoManager.encrypt(b64))
+        }
+        edit.apply()
+    }
+
+    /** True when we have everything needed for silent cloud auto-backup. */
+    fun isCloudSignedIn(): Boolean =
+        getCloudToken().isNotEmpty() && getCloudEncKey() != null && getCloudServerUrl().isNotBlank()
+
+    /** Clears the cloud session (sign out). Leaves server URL + username for prefill. */
+    fun clearCloudSession() {
+        prefs.edit().remove(cloudTokenKey).remove(cloudEncKeyKey).remove(lastSyncHashKey).apply()
+    }
+
+    // ---- First-run onboarding + sync bookkeeping ----
+
+    fun isOnboarded(): Boolean = prefs.getBoolean(onboardedKey, false)
+    fun setOnboarded(done: Boolean) { prefs.edit().putBoolean(onboardedKey, done).apply() }
+
+    /** Hash of the vault at last successful cloud backup — lets background sync skip no-op uploads. */
+    fun getLastSyncHash(): String = prefs.getString(lastSyncHashKey, "") ?: ""
+    fun setLastSyncHash(hash: String) { prefs.edit().putString(lastSyncHashKey, hash).apply() }
 
     // Parses the watch vault string "label:secret,label:secret". Each entry is
     // split on its LAST colon (labels may contain colons; a Base32 secret never

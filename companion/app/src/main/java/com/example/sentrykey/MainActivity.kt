@@ -9,6 +9,12 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -228,6 +234,17 @@ class MainActivity : FragmentActivity() {
             PlayUpdater.checkForUpdate(this)
         }
 
+        // Periodic background cloud backup (~every 6h, only when online). No-ops
+        // when signed out or when the vault is unchanged since the last upload.
+        val syncReq = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "sentrykey-cloud-sync", ExistingPeriodicWorkPolicy.KEEP, syncReq
+        )
+
         setContent {
             SentryKeyTheme {
                 AppLockGate {
@@ -309,6 +326,24 @@ fun SentryKeyDashboard(
 
     // Cloud backup dialog state
     var showCloudBackup by remember { mutableStateOf(false) }
+
+    // First-run onboarding
+    var showOnboarding by remember { mutableStateOf(!vaultStorage.isOnboarded()) }
+
+    // Auto-sync: silently back up to cloud + push to watch after any vault change.
+    val autoSync = remember {
+        AutoSyncManager(vaultStorage, syncManager) { msg ->
+            (context as? android.app.Activity)?.runOnUiThread {
+                syncStatus = msg
+                syncStatusColor = Color(0xFF22C55E)
+            }
+        }
+    }
+    var autoSyncPrimed by remember { mutableStateOf(false) }
+    LaunchedEffect(accounts) {
+        // Skip the initial load; only react to real changes.
+        if (autoSyncPrimed) autoSync.onVaultChanged(accounts) else autoSyncPrimed = true
+    }
 
     if (GITHUB_UPDATES) {
         LaunchedEffect(Unit) {
@@ -822,6 +857,15 @@ fun SentryKeyDashboard(
                             Text("Cancel", color = Color(0xFF8F93A3))
                         }
                     }
+                )
+            }
+
+            if (showOnboarding) {
+                OnboardingDialog(
+                    onOpenCloud = {
+                        vaultStorage.setOnboarded(true); showOnboarding = false; showCloudBackup = true
+                    },
+                    onFinish = { vaultStorage.setOnboarded(true); showOnboarding = false }
                 )
             }
 

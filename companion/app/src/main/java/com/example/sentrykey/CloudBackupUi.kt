@@ -68,13 +68,27 @@ fun CloudBackupDialog(
     var status by remember { mutableStateOf<String?>(null) }
     var statusError by remember { mutableStateOf(false) }
 
-    var token by remember { mutableStateOf("") }
-    var encKey by remember { mutableStateOf<ByteArray?>(null) }
+    // Initialize from the persisted (stay-signed-in) session, if any.
+    var token by remember { mutableStateOf(vaultStorage.getCloudToken()) }
+    var encKey by remember { mutableStateOf(vaultStorage.getCloudEncKey()) }
     var backups by remember { mutableStateOf<List<CloudBackupClient.BackupMeta>>(emptyList()) }
     val connected = encKey != null && token.isNotEmpty()
 
     fun setStatus(msg: String, isError: Boolean) {
         status = msg; statusError = isError
+    }
+
+    // If already signed in when the dialog opens, load the backup list.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (connected) {
+            try { backups = CloudBackupClient.listBackups(serverUrl, token) } catch (_: Exception) {}
+        }
+    }
+
+    fun signOut() {
+        vaultStorage.clearCloudSession()
+        token = ""; encKey = null; backups = emptyList(); password = ""
+        setStatus("Signed out.", false)
     }
 
     fun connect() {
@@ -93,8 +107,9 @@ fun CloudBackupDialog(
                 vaultStorage.setCloudServerUrl(serverUrl)
                 vaultStorage.setCloudUsername(username)
                 vaultStorage.setCloudToken(tok)
+                vaultStorage.setCloudEncKey(keys.encKey)   // stay signed in for silent auto-backup
                 backups = CloudBackupClient.listBackups(serverUrl, tok)
-                setStatus("Connected as $username.", false)
+                setStatus("Connected — auto-backup is now on.", false)
             } catch (e: Exception) {
                 setStatus(e.message ?: "Connection failed.", true)
             } finally {
@@ -201,6 +216,11 @@ fun CloudBackupDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) { Text("⬆ Back up vault now", color = Color(0xFF07080B), fontWeight = FontWeight.Bold) }
 
+                    Text(
+                        "✓ Signed in — your vault auto-backs-up after every change.",
+                        color = Color(0xFF22C55E), fontSize = 11.sp
+                    )
+
                     Text("Backups on server", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     if (backups.isEmpty()) {
                         Text("No backups yet.", color = muted, fontSize = 12.sp)
@@ -237,6 +257,9 @@ fun CloudBackupDialog(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (connected) {
+                        TextButton(onClick = { if (!busy) signOut() }) { Text("Sign out", color = Color(0xFFEF4444)) }
+                    }
                     TextButton(onClick = { if (!busy) onDismiss() }) { Text("Close", color = muted) }
                 }
             }
