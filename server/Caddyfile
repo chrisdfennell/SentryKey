@@ -1,0 +1,7 @@
+# Caddy automatically obtains + renews Let's Encrypt TLS certificates for these
+# domains (requires DNS pointed at this host and ports 80/443 reachable).
+# Browsers require HTTPS for the Web Crypto API the dashboard relies on.
+sentrykey.app, www.sentrykey.app {
+    encode gzip
+    reverse_proxy app:3000
+}

@@ -1,0 +1,12 @@
+# Keep the image clean and free of host/dev artifacts and secrets.
+node_modules
+.env
+.env*.local
+backups
+db
+.git
+*.log
+# Build/deploy files not needed inside the image:
+docker-compose.yml
+Caddyfile
+.dockerignore

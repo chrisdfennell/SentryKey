@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SentryKey — Backup Vault Dashboard</title>
+  <meta name="description" content="Secure, client-side encrypted dashboard to manage your SentryKey 2FA backups on your VPS." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/assets/app_icon.png" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- ==========================================================================
+       DASHBOARD MAIN LAYOUT
+       ========================================================================== -->
+  <div class="dashboard-layout" id="dashboard-main">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <a href="/" class="logo">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="10" fill="#0A0B0E"/>
+            <circle cx="24" cy="24" r="21" stroke="#FFA500" stroke-width="1.5" opacity="0.65"/>
+            <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="#10121A" stroke="#FFA500" stroke-width="1.8"/>
+            <circle cx="24" cy="18" r="4" stroke="#FFA500" stroke-width="1.8" fill="none"/>
+            <path d="M24 22 V30 M24 26 H27.5 M24 29 H27.5" stroke="#FFA500" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Sentry<span>Key</span>
+        </a>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" id="nav-vault"><span style="font-size: 16px;">🔑</span> My Vault</a>
+        <a href="/" class="nav-item" id="nav-home"><span style="font-size: 16px;">🏠</span> Home Page</a>
+        <a href="/privacy.html" class="nav-item" id="nav-privacy"><span style="font-size: 16px;">🛡️</span> Privacy Policy</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div style="border-top: 1px solid var(--card-border); padding-top: 16px; margin-bottom: 8px;">
+          <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px;">Active Session</p>
+          <p id="sidebar-user-display" style="font-weight: 700; color: white; font-size: 15px; margin-bottom: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading user...</p>
+          <button class="btn btn-secondary btn-danger" id="btn-logout" style="width: 100%; padding: 8px 12px; font-size: 13px;">🔒 Log Out</button>
+        </div>
+        <div>
+          <p>Vault Server v1.1.0</p>
+          <p>SentryKey Zero-Knowledge Node</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Dashboard Area -->
+    <main class="main-content">
+      
+      <!-- Top header stats -->
+      <header class="stats-header">
+        <div>
+          <h1 id="dashboard-title">Vault Backups</h1>
+          <p style="color: var(--text-secondary); font-size: 14px;" id="dashboard-subtitle">Manage your cloud synchronizations securely</p>
+        </div>
+
+        <div class="server-status">
+          <span class="status-dot online" id="status-indicator"></span>
+          <span id="status-text">Cloud Node Connected</span>
+        </div>
+      </header>
+
+      <!-- Cloud Backup Directory Selector -->
+      <section class="backup-panel glass" id="cloud-backups-selector">
+        <h3>Cloud Backups on Disk</h3>
+        <div class="backup-list-select">
+          <select id="backup-files-dropdown" class="backup-select">
+            <option value="">-- No backups found on server --</option>
+          </select>
+          <button class="btn btn-secondary" id="btn-refresh-backups" title="Refresh List">🔄 Refresh</button>
+          <button class="btn btn-secondary" id="btn-load-backup">📥 Fetch & Load</button>
+        </div>
+      </section>
+
+      <!-- Dashboard Action Bar -->
+      <section class="action-bar">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-accounts-input" class="search-input" placeholder="Search accounts (e.g. Github, Google...)" />
+        </div>
+
+        <div class="sync-bar">
+          <button class="btn btn-primary" id="btn-add-account" style="display: none;">➕ Add Account</button>
+          <button class="btn btn-secondary" id="btn-save-cloud" style="display: none;">💾 Sync to Cloud</button>
+          <button class="btn btn-secondary" id="btn-export-backup" style="display: none;">📤 Download File</button>
+          
+          <!-- Manual Local file upload -->
+          <label class="btn btn-secondary" id="lbl-upload-backup" style="cursor: pointer;">
+            📂 Load Local Backup
+            <input type="file" id="upload-backup-file-input" accept=".skbackup,.json" style="display: none;" />
+          </label>
+        </div>
+      </section>
+
+      <!-- ==========================================================================
+           PASSPHRASE DECRYPTION GATE (Fallback for manual files with custom pass)
+           ========================================================================== -->
+      <div id="vault-decryption-gate" class="glass" style="max-width: 500px; margin: 40px auto; padding: 40px; border-radius: 16px; text-align: center; display: none;">
+        <span style="font-size: 40px; margin-bottom: 20px; display: inline-block;">🔓</span>
+        <h2 style="margin-bottom: 12px;">Decrypt External Backup</h2>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 24px;">This file is encrypted with a custom passphrase. Please enter its password below to decrypt and import its contents locally.</p>
+        
+        <form id="vault-decrypt-form">
+          <div class="form-group">
+            <input type="password" id="vault-passphrase-input" class="input-field" placeholder="Backup Passphrase" required autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;" id="btn-vault-decrypt">Decrypt Vault</button>
+        </form>
+        <button class="btn btn-secondary" id="btn-cancel-decryption" style="width: 100%; margin-top: 12px;">Cancel</button>
+      </div>
+
+      <!-- Accounts List Container -->
+      <div class="accounts-grid" id="accounts-grid-container">
+        <!-- Dashboard Empty State -->
+        <div class="empty-vault glass" id="empty-dashboard-state">
+          <div class="empty-vault-icon">🔑</div>
+          <h3>Your vault is locked or empty</h3>
+          <p>Fetch a cloud backup from the dropdown above, load a local backup file, or start creating a new vault from scratch.</p>
+          <button class="btn btn-primary" id="btn-create-scratch">Create New Vault</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       MODALS
+       ========================================================================== -->
+
+  <!-- Add Account Modal -->
+  <div id="add-account-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <div class="modal-icon">➕</div>
+        <div class="modal-title">
+          <h2>Add New Account</h2>
+        </div>
+      </div>
+      <form id="add-account-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-account-label">Account Label</label>
+            <input type="text" id="new-account-label" class="input-field" placeholder="e.g. GitHub: username" required />
+          </div>
+          <div class="form-group">
+            <label for="new-account-secret">Secret Key (Base32)</label>
+            <input type="text" id="new-account-secret" class="input-field" placeholder="e.g. KRSXG5CTMVRXEZLU" required style="text-transform: uppercase;" autocomplete="off" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-add-account-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-add-account-submit">Add Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirm Save Passphrase Modal (Only used if no encKey exists in memory) -->
+  <div id="save-passphrase-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <div class="modal-icon">🔒</div>
+        <div class="modal-title">
+          <h2>Vault Passphrase</h2>
+        </div>
+      </div>
+      <form id="save-vault-form">
+        <div class="modal-body">
+          <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 18px;">To encrypt your backup, set a passphrase. This password is used to generate the AES encryption key. Write it down — without it, the backup cannot be restored.</p>
+          <div class="form-group">
+            <label for="save-vault-passphrase">Backup Passphrase</label>
+            <input type="password" id="save-vault-passphrase" class="input-field" placeholder="Passphrase" required />
+          </div>
+          <div class="form-group">
+            <label for="save-vault-passphrase-confirm">Confirm Passphrase</label>
+            <input type="password" id="save-vault-passphrase-confirm" class="input-field" placeholder="Confirm Passphrase" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-save-passphrase-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-passphrase-submit">Encrypt & Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-notification" class="toast">Action Complete</div>
+
+  <!-- Scripts -->
+  <script src="/js/crypto.js"></script>
+  <script src="/js/otp.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

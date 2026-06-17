@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SentryKey — Privacy Policy</title>
+  <meta name="description" content="Privacy policy for SentryKey, a TOTP two-factor authentication app for Garmin watches with Android and iOS companions. No data is collected." />
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" href="/assets/app_icon.png" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .privacy-wrap {
+      max-width: 800px;
+      margin: 140px auto 100px;
+      padding: 40px;
+      border-radius: 18px;
+    }
+    .privacy-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .privacy-header svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+    }
+    .privacy-content h2 {
+      margin-top: 30px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+    .privacy-content p, .privacy-content ul {
+      margin-bottom: 18px;
+      color: var(--text-secondary);
+    }
+    .privacy-content ul {
+      padding-left: 24px;
+    }
+    .privacy-content li {
+      margin-bottom: 8px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="/" class="logo" id="nav-logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="10" fill="#0A0B0E"/>
+          <circle cx="24" cy="24" r="21" stroke="#FFA500" stroke-width="1.5" opacity="0.65"/>
+          <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="#10121A" stroke="#FFA500" stroke-width="1.8"/>
+          <circle cx="24" cy="18" r="4" stroke="#FFA500" stroke-width="1.8" fill="none"/>
+          <path d="M24 22 V30 M24 26 H27.5 M24 29 H27.5" stroke="#FFA500" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        Sentry<span>Key</span>
+      </a>
+      <div class="nav-links">
+        <a href="/dashboard.html" class="btn btn-primary" id="nav-btn-dashboard">Open Dashboard</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Privacy Policy Wrapper -->
+  <div class="container">
+    <div class="privacy-wrap glass">
+      <a href="/" class="back-link" id="privacy-back-link">← Back to Home</a>
+      
+      <div class="privacy-header">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="none" stroke="#FFA500" stroke-width="2.5"/>
+          <path d="m20.6 23.6-2.3-2.3 1.1-1.1 1.2 1.2 3.9-3.9 1.1 1.1z" fill="#FFA500"/>
+        </svg>
+        <h1>Privacy Policy</h1>
+        <div style="color: var(--text-muted); font-size: 13px; margin-top: 8px;">Last updated: June 17, 2026</div>
+      </div>
+
+      <div class="privacy-content">
+        <p>SentryKey is a two-factor authentication (TOTP) app for Garmin watches with Android and iOS companion apps. This policy explains what the apps do and don't do with your data.</p>
+
+        <h2 style="color: var(--orange);">Data Privacy Standard</h2>
+        <p><strong>SentryKey does not collect, transmit, or sell any personal data.</strong> Everything stays strictly on your local devices and your personal VPS backup host.</p>
+
+        <h2>What data the app handles</h2>
+        <ul>
+          <li><strong>2FA accounts (labels and secret keys).</strong> You add these by scanning a QR code or entering them manually. They are used only on-device to generate your rotating codes.</li>
+        </ul>
+
+        <h2>Where it is stored</h2>
+        <ul>
+          <li><strong>Android:</strong> In the app's private, encrypted on-device storage.</li>
+          <li><strong>iOS:</strong> In the secure device Keychain.</li>
+          <li><strong>Garmin watch:</strong> In the app's on-device storage.</li>
+          <li><strong>VPS Cloud Backup:</strong> Optionally stored on your own self-hosted server in a passphrase-encrypted <code>.skbackup</code> format.</li>
+        </ul>
+        <p>We do not operate any centralized backend server. Your secrets are <strong>never</strong> shared with us or any third party. Any data transmission is either a direct Bluetooth sync to your Garmin watch or an upload to your private VPS.</p>
+
+        <h2>Permissions and why</h2>
+        <ul>
+          <li><strong>Camera</strong> — to scan 2FA QR codes. Images are processed locally on-device and are never stored or transmitted.</li>
+          <li><strong>Bluetooth</strong> — to sync your vault to your paired Garmin watch.</li>
+          <li><strong>Internet</strong> — used only to load issuer icons (favicons) on Android and check for software updates. No personal data is ever transmitted.</li>
+        </ul>
+
+        <h2>Data sharing</h2>
+        <ul>
+          <li><strong>Exporting:</strong> Exporting a backup or QR code is an action you initiate. Backups can be encrypted with a passphrase you choose or exported as plaintext in the standard <code>otpauth://</code> format. You are fully responsible for where you send or store these files.</li>
+        </ul>
+
+        <h2>Changes to this policy</h2>
+        <p>Updates to this policy will be posted on this page and in the project's repository.</p>
+
+        <h2>Contact</h2>
+        <p>Questions? Open an issue at <a href="https://github.com/chrisdfennell/SentryKey/issues" target="_blank">github.com/chrisdfennell/SentryKey/issues</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2026 SentryKey. Built for security, made for the wrist.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

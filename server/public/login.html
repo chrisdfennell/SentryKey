@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SentryKey — Secure Access Login</title>
+  <meta name="description" content="Log in securely to SentryKey Web using zero-knowledge client-side encryption." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/assets/app_icon.png" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .login-wrap {
+      max-width: 440px;
+      margin: 140px auto 100px;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .login-header svg {
+      width: 44px;
+      height: 44px;
+      margin-bottom: 12px;
+    }
+    .auth-toggle {
+      display: flex;
+      background: rgba(27, 30, 42, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      padding: 4px;
+    }
+    .auth-tab {
+      flex: 1;
+      text-align: center;
+      padding: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+    .auth-tab.active {
+      background: var(--orange-gradient);
+      color: #07080B;
+    }
+    .crypto-status {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--orange);
+      font-weight: 500;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 165, 0, 0.25);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="/" class="logo" id="nav-logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="10" fill="#0A0B0E"/>
+          <circle cx="24" cy="24" r="21" stroke="#FFA500" stroke-width="1.5" opacity="0.65"/>
+          <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="#10121A" stroke="#FFA500" stroke-width="1.8"/>
+          <circle cx="24" cy="18" r="4" stroke="#FFA500" stroke-width="1.8" fill="none"/>
+          <path d="M24 22 V30 M24 26 H27.5 M24 29 H27.5" stroke="#FFA500" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        Sentry<span>Key</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Login Form Wrapper -->
+  <div class="container">
+    <div class="login-wrap glass">
+      
+      <div class="login-header">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="none" stroke="#FFA500" stroke-width="2.5"/>
+          <circle cx="24" cy="18" r="4" stroke="#FFA500" stroke-width="2"/>
+          <path d="M24 22 V30 M24 26 H27.5 M24 29 H27.5" stroke="#FFA500" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h1 id="auth-title" style="font-size: 24px;">Sign In</h1>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;" id="auth-desc">Access your private zero-knowledge backups</p>
+      </div>
+
+      <!-- Toggle Tabs -->
+      <div class="auth-toggle">
+        <div class="auth-tab active" id="tab-signin">Sign In</div>
+        <div class="auth-tab" id="tab-signup">Register</div>
+      </div>
+
+      <!-- Form -->
+      <form id="auth-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" class="input-field" placeholder="Username" required autocomplete="username" />
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Master Password</label>
+          <input type="password" id="password" class="input-field" placeholder="Master Password" required autocomplete="current-password" />
+        </div>
+
+        <!-- Invite code shown only when registering and server-restricted -->
+        <div class="form-group" id="invite-code-container" style="display: none;">
+          <label for="invite-code">Server Access Passphrase / Invite Code</label>
+          <input type="password" id="invite-code" class="input-field" placeholder="Invite Passphrase" />
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;" id="btn-auth-submit">Sign In</button>
+      </form>
+
+      <!-- Key Derivation Status -->
+      <div class="crypto-status" id="crypto-derivation-status">
+        <div class="spinner"></div>
+        <span>Deriving secure keys client-side...</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-notification" class="toast">Action Complete</div>
+
+  <!-- Scripts -->
+  <script src="/js/crypto.js"></script>
+  <!-- NOTE: do NOT load dashboard.js here. It runs a session check on load and
+       redirects to /login.html when no session exists, which on this page is an
+       infinite reload loop. login.html has its own toast + auth logic below. -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      let activeTab = "signin"; // signin or signup
+      let isRestricted = false;
+
+      const elTitle = document.getElementById("auth-title");
+      const elDesc = document.getElementById("auth-desc");
+      const elTabSignIn = document.getElementById("tab-signin");
+      const elTabSignUp = document.getElementById("tab-signup");
+      const elForm = document.getElementById("auth-form");
+      const elUsername = document.getElementById("username");
+      const elPassword = document.getElementById("password");
+      const elInviteContainer = document.getElementById("invite-code-container");
+      const elInviteCode = document.getElementById("invite-code");
+      const elBtnSubmit = document.getElementById("btn-auth-submit");
+      const elCryptoStatus = document.getElementById("crypto-derivation-status");
+      const elToast = document.getElementById("toast-notification");
+
+      function showToast(message, type = "info") {
+        elToast.textContent = message;
+        elToast.className = "toast show";
+        if (type === "error") elToast.classList.add("error");
+        if (type === "success") elToast.classList.add("success");
+        setTimeout(() => elToast.classList.remove("show"), 3500);
+      }
+
+      // Toggle tab handlers
+      elTabSignIn.addEventListener("click", () => {
+        if (activeTab === "signin") return;
+        activeTab = "signin";
+        elTabSignIn.classList.add("active");
+        elTabSignUp.classList.remove("active");
+        elTitle.textContent = "Sign In";
+        elDesc.textContent = "Access your private zero-knowledge backups";
+        elBtnSubmit.textContent = "Sign In";
+        elInviteContainer.style.display = "none";
+        elInviteCode.required = false;
+      });
+
+      elTabSignUp.addEventListener("click", () => {
+        if (activeTab === "signup") return;
+        activeTab = "signup";
+        elTabSignUp.classList.add("active");
+        elTabSignIn.classList.remove("active");
+        elTitle.textContent = "Create Account";
+        elDesc.textContent = "Derive private encryption keys locally and sign up";
+        elBtnSubmit.textContent = "Register";
+        
+        if (isRestricted) {
+          elInviteContainer.style.display = "block";
+          elInviteCode.required = true;
+        } else {
+          elInviteContainer.style.display = "none";
+          elInviteCode.required = false;
+        }
+      });
+
+      elForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const user = elUsername.value.trim();
+        const pass = elPassword.value;
+
+        if (!user || !pass) {
+          showToast("Username and Master Password are required.", "error");
+          return;
+        }
+
+        if (activeTab === "signup" && pass.length < 8) {
+          showToast("Master Password must be at least 8 characters.", "error");
+          return;
+        }
+
+        // Lock form inputs
+        elBtnSubmit.disabled = true;
+        elCryptoStatus.style.display = "flex";
+
+        try {
+          // 1. Zero-knowledge key stretching (slow PBKDF2)
+          // Runs locally in the user's browser, preventing the server from ever seeing "pass"
+          const { authKey, encKey } = await SentryCrypto.deriveUserKeys(user, pass);
+
+          elCryptoStatus.style.display = "none";
+
+          if (activeTab === "signup") {
+            // Register flow
+            showToast("Registering account...", "info");
+            const response = await fetch("/api/auth/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: user,
+                authKey: authKey,
+                inviteCode: elInviteCode.value.trim()
+              })
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Registration failed");
+
+            showToast("Account created successfully. Logging in...", "success");
+            // Auto log in after registration
+            activeTab = "signin"; // change state
+          }
+
+          // Login flow
+          showToast("Signing in...", "info");
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: user,
+              authKey: authKey
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Authentication failed");
+
+          // Save authentication token to localStorage
+          localStorage.setItem("sentrykey_session_token", data.token);
+          localStorage.setItem("sentrykey_username", data.username);
+
+          // Save the derived encryption key to sessionStorage (cleared on tab close)
+          const encKeyB64 = SentryCrypto.bytesToBase64(encKey);
+          sessionStorage.setItem("sentrykey_enc_key", encKeyB64);
+
+          showToast("Authentication successful.", "success");
+          
+          setTimeout(() => {
+            window.location.href = "/dashboard.html";
+          }, 800);
+
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || "An error occurred during authentication.", "error");
+          elBtnSubmit.disabled = false;
+        }
+      });
+
+      // Load server invitation settings in the BACKGROUND. This must run AFTER
+      // the submit/tab handlers are attached (and must not be awaited before
+      // them) — otherwise the form could submit natively before its handler is
+      // wired, which a form-filler extension turns into a page-reload loop.
+      fetch("/api/auth/config")
+        .then((res) => res.json())
+        .then((data) => {
+          isRestricted = !!data.registrationRestricted;
+          // If the user already switched to Register, reveal the invite field now.
+          if (activeTab === "signup" && isRestricted) {
+            elInviteContainer.style.display = "block";
+            elInviteCode.required = true;
+          }
+        })
+        .catch((err) => console.error("Failed to read server auth config:", err));
+
+    });
+  </script>
+</body>
+</html>

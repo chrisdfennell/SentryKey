@@ -1,0 +1,43 @@
+# Turnkey production stack for sentrykey.app:
+#   - app:   the Node backup/dashboard server (not exposed to the host directly)
+#   - caddy: reverse proxy that terminates TLS with automatic Let's Encrypt certs
+#
+# Deploy:
+#   1) point sentrykey.app DNS (A/AAAA) at this host; open ports 80 + 443
+#   2) cp .env.example .env  &&  edit SERVER_ACCESS_PASSPHRASE
+#   3) docker compose up -d --build
+services:
+  app:
+    build: .
+    image: sentrykey-vault
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      MAX_BACKUPS_RETAINED: "15"
+      # From .env (see .env.example). If set, registration requires it as an invite code.
+      SERVER_ACCESS_PASSPHRASE: "${SERVER_ACCESS_PASSPHRASE:-}"
+    volumes:
+      - sentrykey-db:/usr/src/app/db
+      - sentrykey-backups:/usr/src/app/backups
+    expose:
+      - "3000"          # internal-only; reached by caddy over the compose network
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # persists issued certificates
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  sentrykey-db:
+  sentrykey-backups:
+  caddy_data:
+  caddy_config:
