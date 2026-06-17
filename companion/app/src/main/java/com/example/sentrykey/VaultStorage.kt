@@ -88,6 +88,44 @@ class VaultStorage(context: Context) {
         edit.apply()
     }
 
+    // ---- Cloud backup account (convenience prefill; secrets never persisted) ----
+    // We store the server URL + username for prefill and the session token so the
+    // user stays "logged in". The master password / encKey are NEVER persisted —
+    // they're entered per session and kept only in memory.
+
+    private val cloudUrlKey = "cloud_url"
+    private val cloudUserKey = "cloud_user"
+    private val cloudTokenKey = "cloud_token_enc"
+
+    fun getCloudServerUrl(): String =
+        prefs.getString(cloudUrlKey, null) ?: CloudBackupClient.DEFAULT_SERVER_URL
+
+    fun setCloudServerUrl(url: String) {
+        prefs.edit().putString(cloudUrlKey, url.trim()).apply()
+    }
+
+    fun getCloudUsername(): String = prefs.getString(cloudUserKey, "") ?: ""
+
+    fun setCloudUsername(username: String) {
+        prefs.edit().putString(cloudUserKey, username.trim()).apply()
+    }
+
+    fun getCloudToken(): String {
+        val blob = prefs.getString(cloudTokenKey, null) ?: return ""
+        return try {
+            CryptoManager.decrypt(blob)
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    fun setCloudToken(token: String) {
+        val edit = prefs.edit()
+        if (token.isEmpty()) edit.remove(cloudTokenKey)
+        else edit.putString(cloudTokenKey, CryptoManager.encrypt(token))
+        edit.apply()
+    }
+
     // Parses the watch vault string "label:secret,label:secret". Each entry is
     // split on its LAST colon (labels may contain colons; a Base32 secret never
     // does), mirroring the watch's parseVaultString. Used by watch -> phone

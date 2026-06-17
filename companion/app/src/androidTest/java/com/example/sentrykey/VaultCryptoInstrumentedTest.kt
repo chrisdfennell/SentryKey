@@ -149,6 +149,45 @@ class VaultCryptoInstrumentedTest {
         assertFalse(SyncCrypto.isEncrypted("GitHub:JBSWY3DPEHPK3PXP,Discord:KRSXG5CTMVRXEZLU"))
     }
 
+    // ---- Cloud zero-knowledge crypto (must match the web dashboard) ----
+
+    // Vector computed from the web crypto.js deriveUserKeys (server/_vector.js).
+    // If these drift, phone backups won't open in the browser (and vice-versa).
+    @Test
+    fun cloudCrypto_keyDerivationMatchesWebVector() {
+        val keys = CloudCrypto.deriveUserKeys("alice", "supersecuremasterpassword")
+        assertEquals("68c6d3429e6d6b8025aa38fc281779b1cf308a90e6422888c94aceeb621bc0f4", keys.authKey)
+        assertEquals(
+            "3294dbf0fca8ca2c526b1397fb9bd6c1175caf5674fb5ccbf99af4956a9dbb03",
+            keys.encKey.joinToString("") { "%02x".format(it) }
+        )
+    }
+
+    @Test
+    fun cloudCrypto_usernameIsCaseInsensitive() {
+        val a = CloudCrypto.deriveUserKeys("Alice", "supersecuremasterpassword")
+        val b = CloudCrypto.deriveUserKeys("alice", "supersecuremasterpassword")
+        assertEquals(a.authKey, b.authKey)
+    }
+
+    @Test
+    fun cloudCrypto_encryptDecryptRoundTrip() {
+        val keys = CloudCrypto.deriveUserKeys("bob", "hunter2hunter2")
+        val vault = """{"app":"SentryKey","version":1,"accounts":[{"label":"GitHub","secret":"KRSXG5CTMVRXEZLU"}]}"""
+        val envelope = CloudCrypto.encryptWithKey(vault, keys.encKey)
+        assertTrue(ExportImport.isEncryptedBackup(envelope))
+        assertFalse(envelope.contains("KRSXG5CTMVRXEZLU"))
+        assertEquals(vault, CloudCrypto.decryptWithKey(envelope, keys.encKey))
+    }
+
+    @Test(expected = BadPasswordException::class)
+    fun cloudCrypto_wrongKeyThrows() {
+        val a = CloudCrypto.deriveUserKeys("carol", "passwordone")
+        val b = CloudCrypto.deriveUserKeys("carol", "passwordtwo")
+        val envelope = CloudCrypto.encryptWithKey("{\"accounts\":[]}", a.encKey)
+        CloudCrypto.decryptWithKey(envelope, b.encKey)
+    }
+
     // ---- helpers ----
 
     private fun prefs() = ctx.getSharedPreferences("sentry_key_vault", android.content.Context.MODE_PRIVATE)

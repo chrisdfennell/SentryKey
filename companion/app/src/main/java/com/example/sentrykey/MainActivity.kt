@@ -211,10 +211,13 @@ class MainActivity : FragmentActivity() {
 
         // Block screenshots, screen recording, and hide contents in the app
         // switcher — TOTP codes should never leak into captures.
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        // Disabled in debug builds so developers can capture screenshots for the app store.
+        if (!BuildConfig.DEBUG) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
 
         vaultStorage = VaultStorage(this)
         syncManager = GarminSyncManager(this)
@@ -303,6 +306,9 @@ fun SentryKeyDashboard(
     var showSyncPassDialog by remember { mutableStateOf(false) }
     var syncPassInput by remember { mutableStateOf("") }
     var syncPassSet by remember { mutableStateOf(vaultStorage.getSyncPassphrase().isNotEmpty()) }
+
+    // Cloud backup dialog state
+    var showCloudBackup by remember { mutableStateOf(false) }
 
     if (GITHUB_UPDATES) {
         LaunchedEffect(Unit) {
@@ -819,6 +825,21 @@ fun SentryKeyDashboard(
                 )
             }
 
+            if (showCloudBackup) {
+                CloudBackupDialog(
+                    accounts = accounts,
+                    vaultStorage = vaultStorage,
+                    onImported = { imported ->
+                        val merged = accounts + imported.filter { new ->
+                            accounts.none { it.label == new.label && it.secret == new.secret }
+                        }
+                        accounts = merged
+                        vaultStorage.saveAccounts(merged)
+                    },
+                    onDismiss = { showCloudBackup = false }
+                )
+            }
+
             // Export / Import (otpauth standard) — interop with other authenticators
             VaultActionsRow(accounts = accounts) { imported ->
                 val merged = accounts + imported.filter { new ->
@@ -826,6 +847,16 @@ fun SentryKeyDashboard(
                 }
                 accounts = merged
                 vaultStorage.saveAccounts(merged)
+            }
+
+            // Zero-knowledge cloud backup (encrypted to your own server)
+            Button(
+                onClick = { showCloudBackup = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222533)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("☁ Cloud Backup", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
 
             // Search bar & Scan direct
