@@ -1,3 +1,0 @@
-com.fennell.sentrykey.wear
-drawable ic_sentrykey
-string app_name
