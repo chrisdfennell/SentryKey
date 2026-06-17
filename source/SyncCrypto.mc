@@ -56,7 +56,12 @@ module SyncCrypto {
                 return null;
             }
             var plain = keystreamXor(ciphertext, encKey, nonce);
-            return StringUtil.utf8ArrayToString(plain);
+            // utf8ArrayToString wants an Array<Number>, not a ByteArray.
+            var plainArr = [] as Array<Number>;
+            for (var i = 0; i < plain.size(); i++) {
+                plainArr.add(plain[i] & 0xFF);
+            }
+            return StringUtil.utf8ArrayToString(plainArr);
         } catch (e) {
             return null;
         }
