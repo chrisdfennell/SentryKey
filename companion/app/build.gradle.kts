@@ -107,7 +107,7 @@ dependencies {
     implementation("com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar")
     // Play In-App Updates — only linked into the `play` flavor.
     "playImplementation"("com.google.android.play:app-update-ktx:2.1.0")
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("sh.calvin.reorderable:reorderable:2.4.3")
     implementation(libs.play.services.code.scanner)
