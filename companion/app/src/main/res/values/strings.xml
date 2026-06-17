@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SentryKey</string>
+    <string name="widget_description">Glanceable 2FA codes. Tap an account to reveal its current code.</string>
 </resources>
