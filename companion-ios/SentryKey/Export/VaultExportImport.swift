@@ -29,11 +29,40 @@ enum VaultExportImport {
         return str
     }
 
-    /// Writes the backup to a temp file and returns its URL (for ShareLink).
+    /// Writes the plaintext backup to a temp file and returns its URL (for ShareLink).
     static func exportFile(_ accounts: [TwoFactorAccount]) -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sentrykey-vault.json")
         try? exportJSON(accounts).data(using: .utf8)?.write(to: url)
         return url
+    }
+
+    /// Serializes to a passphrase-encrypted backup string (see `BackupCrypto`).
+    static func exportEncryptedJSON(_ accounts: [TwoFactorAccount], password: String) throws -> String {
+        try BackupCrypto.encrypt(exportJSON(accounts), password: password)
+    }
+
+    /// Writes an encrypted backup to a temp file and returns its URL (for ShareLink).
+    static func exportEncryptedFile(_ accounts: [TwoFactorAccount], password: String) -> URL? {
+        guard let body = try? exportEncryptedJSON(accounts, password: password) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sentrykey-vault.skbackup")
+        try? body.data(using: .utf8)?.write(to: url)
+        return url
+    }
+
+    /// True if `text` is an encrypted SentryKey backup (needs a passphrase to import).
+    static func isEncryptedBackup(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"),
+              let data = trimmed.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        return (obj["encrypted"] as? Bool) == true
+    }
+
+    /// Decrypts an encrypted backup with `password`, then parses it. Throws
+    /// `BadPasswordError` on a wrong passphrase or corrupt file.
+    static func parseEncryptedImport(_ text: String, password: String) throws -> [TwoFactorAccount] {
+        let plaintext = try BackupCrypto.decrypt(text, password: password)
+        return parseImport(plaintext)
     }
 
     static func parseImport(_ text: String) -> [TwoFactorAccount] {

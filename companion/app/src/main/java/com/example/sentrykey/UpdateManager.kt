@@ -33,21 +33,22 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 // ----------------------------------------------------------------------------------
-// In-app auto-update for testing — DEBUG BUILDS ONLY.
+// GitHub Releases self-updater — `github` (sideload) flavor only.
 // Google Play forbids apps from downloading/installing APKs to self-update, so
-// this is gated to debug builds (the REQUEST_INSTALL_PACKAGES permission lives in
-// the debug-only manifest). Release/Play builds never poll or self-install.
-// Note: the unauthenticated GitHub API limit is 60 req/hour, so a 30s interval
-// throttles after ~30 minutes.
+// this path is compiled into the github flavor, which carries the
+// REQUEST_INSTALL_PACKAGES permission (src/github/AndroidManifest.xml). The play
+// flavor uses Google Play In-App Updates (PlayUpdater) and never self-installs.
+// Note: the unauthenticated GitHub API limit is 60 req/hour; debug builds poll
+// every 30s for testing, release builds check once on launch.
 // ----------------------------------------------------------------------------------
 
-val AUTO_UPDATE_TEST_MODE = BuildConfig.DEBUG
+val GITHUB_UPDATES = !BuildConfig.USE_PLAY_UPDATES
 const val UPDATE_POLL_SECONDS = 30L
 
 object UpdateManager {
     private const val RELEASES_API =
         "https://api.github.com/repos/chrisdfennell/SentryKey/releases/latest"
-    private const val APK_ASSET_NAME = "com.chrisdfennell.SentryKey.apk"
+    private const val APK_ASSET_NAME = "com.fennell.sentrykey.apk"
 
     data class ReleaseInfo(val tag: String, val apkUrl: String?)
 

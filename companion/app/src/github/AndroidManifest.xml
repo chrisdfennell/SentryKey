@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GitHub (sideload) flavor only. This flavor self-updates by downloading and
+  installing an APK from GitHub Releases, which needs REQUEST_INSTALL_PACKAGES.
+  The `play` flavor uses Google Play In-App Updates and never carries this
+  permission, so the Play upload stays clean.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+</manifest>

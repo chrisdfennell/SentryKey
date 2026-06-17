@@ -41,6 +41,16 @@ class SentryKeyApp extends Application.AppBase {
                     );
                     return;
                 }
+                // Encrypted push: decrypt with the sync passphrase from settings.
+                // If decryption fails (wrong/absent passphrase, corrupt), ignore
+                // the message rather than wiping the existing vault.
+                if (SyncCrypto.isEncrypted(str)) {
+                    var decrypted = SyncCrypto.decrypt(str, getSyncPassphrase());
+                    if (decrypted == null) {
+                        return;
+                    }
+                    str = decrypted;
+                }
                 var parsedData = parseVaultString(str);
                 Storage.setValue("vault", parsedData);
                 if (view != null) {
@@ -63,7 +73,32 @@ class SentryKeyApp extends Application.AppBase {
         } catch (e) {
             vault = null;
         }
-        Communications.transmit(serializeVault(vault), null, new VaultTransmitListener());
+        var payload = serializeVault(vault);
+        // Encrypt the reply if a sync passphrase is configured; the phone uses
+        // the same passphrase to decrypt. Otherwise send plaintext (legacy).
+        var passphrase = getSyncPassphrase();
+        if (passphrase != null && passphrase.length() > 0 && payload.length() > 0) {
+            try {
+                payload = SyncCrypto.encrypt(payload, passphrase);
+            } catch (e) {
+                // Fall back to plaintext rather than failing the recovery.
+            }
+        }
+        Communications.transmit(payload, null, new VaultTransmitListener());
+    }
+
+    // Reads the optional sync passphrase from Connect IQ app settings.
+    private function getSyncPassphrase() as String {
+        var pass = null;
+        try {
+            pass = Properties.getValue("syncPassphrase");
+        } catch (e) {
+            pass = null;
+        }
+        if (pass != null && pass instanceof Lang.String) {
+            return pass as String;
+        }
+        return "";
     }
 
     private function serializeVault(vault as Lang.Object?) as String {
