@@ -135,6 +135,51 @@
         <div class="spinner"></div>
         <span>Deriving secure keys client-side...</span>
       </div>
+
+      <div style="text-align:center; margin-top:18px;">
+        <a href="#" id="link-forgot" style="font-size:13px; color:var(--text-secondary);">Forgot your master password?</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Recovery Modal -->
+  <div id="recover-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <div class="modal-icon">🛟</div>
+        <div class="modal-title"><h2>Recover account</h2></div>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-secondary); font-size:13px; margin-bottom:16px;">
+          Use the <strong>recovery key</strong> you saved when you set up recovery. It unlocks your
+          vault and lets you set a new master password. (No recovery key = no recovery — that's
+          zero-knowledge.)
+        </p>
+        <div class="form-group">
+          <label for="rec-username">Username</label>
+          <input type="text" id="rec-username" class="input-field" placeholder="Username" autocomplete="username" />
+        </div>
+        <div class="form-group" id="rec-otp-group" style="display:none;">
+          <label for="rec-otp">Verification code <span id="rec-otp-hint" style="text-transform:none; color:var(--text-muted);"></span></label>
+          <input type="text" id="rec-otp" class="input-field" placeholder="6-digit code" inputmode="numeric" />
+        </div>
+        <div class="form-group">
+          <label for="rec-key">Recovery key</label>
+          <input type="text" id="rec-key" class="input-field" placeholder="ABCDE-FGHJK-LMNPQ-RSTUV" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="rec-new-pass">New master password</label>
+          <input type="password" id="rec-new-pass" class="input-field" placeholder="New master password" />
+        </div>
+        <div class="form-group">
+          <label for="rec-new-pass2">Confirm new password</label>
+          <input type="password" id="rec-new-pass2" class="input-field" placeholder="Confirm" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-rec-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-rec-submit">Recover</button>
+      </div>
     </div>
   </div>
 
@@ -301,6 +346,111 @@
         .catch((err) => console.error("Failed to read server auth config:", err));
 
     });
+  </script>
+
+  <!-- Account recovery (self-contained) -->
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const toast = $("toast-notification");
+      function showToast(msg, type) {
+        toast.textContent = msg;
+        toast.className = "toast show";
+        if (type === "error") toast.classList.add("error");
+        if (type === "success") toast.classList.add("success");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => toast.classList.remove("show"), 3500);
+      }
+
+      const modal = $("recover-modal");
+      $("link-forgot").addEventListener("click", (e) => { e.preventDefault(); modal.classList.add("open"); });
+      $("btn-rec-cancel").addEventListener("click", () => modal.classList.remove("open"));
+
+      let otpSent = false, otpRequired = false;
+      const elUser = $("rec-username"), elOtpGroup = $("rec-otp-group"), elOtp = $("rec-otp"),
+            elOtpHint = $("rec-otp-hint"), elKey = $("rec-key"),
+            elPass = $("rec-new-pass"), elPass2 = $("rec-new-pass2"), elBtn = $("btn-rec-submit");
+
+      elBtn.addEventListener("click", async () => {
+        const username = elUser.value.trim();
+        const recoveryKey = elKey.value.trim();
+        const newPass = elPass.value, newPass2 = elPass2.value;
+        if (!username) { showToast("Enter your username.", "error"); return; }
+        try {
+          elBtn.disabled = true;
+
+          // 1. Start — sends an OTP if a channel is configured for this account.
+          if (!otpSent) {
+            const sres = await fetch("/api/recovery/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username }) });
+            const sdata = await sres.json();
+            if (!sres.ok) throw new Error(sdata.error || "No recovery is set up for this account.");
+            otpSent = true;
+            otpRequired = !!sdata.otpRequired;
+            if (otpRequired) {
+              elOtpGroup.style.display = "block";
+              elOtpHint.textContent = (sdata.sentTo && sdata.sentTo.length) ? "(sent to " + sdata.sentTo.join(", ") + ")" : "";
+              showToast("Verification code sent. Enter it, then click Recover.", "info");
+              elBtn.disabled = false;
+              return; // wait for the OTP
+            }
+          }
+
+          if (!recoveryKey) { showToast("Enter your recovery key.", "error"); elBtn.disabled = false; return; }
+          if (newPass.length < 8) { showToast("New password must be at least 8 characters.", "error"); elBtn.disabled = false; return; }
+          if (newPass !== newPass2) { showToast("Passwords don't match.", "error"); elBtn.disabled = false; return; }
+          const otp = otpRequired ? elOtp.value.trim() : undefined;
+
+          showToast("Recovering…", "info");
+
+          // 2. Fetch wrapped key material + the latest vault ciphertext.
+          const fres = await fetch("/api/recovery/fetch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, otp }) });
+          const fdata = await fres.json();
+          if (!fres.ok) throw new Error(fdata.error || "Verification failed.");
+
+          // 3. Unwrap the encryption key with the recovery key.
+          const rec = await SentryCrypto.deriveRecovery(recoveryKey, SentryCrypto.base64ToBytes(fdata.salt));
+          let oldEncKey;
+          try { oldEncKey = await SentryCrypto.unwrapBytes(fdata.blob, rec.wrapKey); }
+          catch (e) { throw new Error("Invalid recovery key."); }
+
+          // 4. Decrypt the existing vault (if any).
+          let vaultPlain = JSON.stringify({ app: "SentryKey", version: 1, accounts: [] });
+          if (fdata.vault) {
+            try { vaultPlain = await SentryCrypto.decryptWithKey(fdata.vault, oldEncKey); }
+            catch (e) { throw new Error("Invalid recovery key."); }
+          }
+
+          // 5. Derive new keys, re-encrypt the vault, re-wrap recovery under the same key.
+          const nk = await SentryCrypto.deriveUserKeys(username, newPass);
+          const newVaultEnv = await SentryCrypto.encryptWithKey(vaultPlain, nk.encKey);
+          const newSalt = SentryCrypto.randomSalt();
+          const newRec = await SentryCrypto.deriveRecovery(recoveryKey, newSalt);
+          const newBlob = await SentryCrypto.wrapBytes(nk.encKey, newRec.wrapKey);
+
+          // 6. Reset on the server.
+          const rres = await fetch("/api/recovery/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+            username,
+            recoveryAuthKey: rec.authKey,
+            otp,
+            newAuthKey: nk.authKey,
+            newRecovery: { salt: SentryCrypto.bytesToBase64(newSalt), blob: newBlob, authKey: newRec.authKey },
+            vault: newVaultEnv
+          }) });
+          const rdata = await rres.json();
+          if (!rres.ok) throw new Error(rdata.error || "Recovery failed.");
+
+          // 7. Sign in with the new session.
+          localStorage.setItem("sentrykey_session_token", rdata.token);
+          localStorage.setItem("sentrykey_username", rdata.username);
+          sessionStorage.setItem("sentrykey_enc_key", SentryCrypto.bytesToBase64(nk.encKey));
+          showToast("Recovered! Signing you in…", "success");
+          setTimeout(() => { window.location.href = "/dashboard.html"; }, 800);
+        } catch (err) {
+          showToast(err.message || "Recovery failed.", "error");
+          elBtn.disabled = false;
+        }
+      });
+    })();
   </script>
 </body>
 </html>

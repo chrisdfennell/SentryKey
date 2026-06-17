@@ -498,4 +498,61 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Export failed.", "error");
     }
   });
+
+  // ==========================================================================
+  // ACCOUNT RECOVERY SETUP
+  // ==========================================================================
+  const elNavRecovery = $("nav-recovery");
+  const elRecoveryModal = $("recovery-modal");
+  const elRecoveryKeyBox = $("recovery-keybox");
+  const elRecoveryKeyValue = $("recovery-key-value");
+  const elBtnCopyRecovery = $("btn-copy-recovery");
+  const elRecoveryEmail = $("recovery-email");
+  const elRecoveryPhone = $("recovery-phone");
+  const elRecoveryConfirm = $("recovery-confirm");
+  const elBtnRecoveryEnable = $("btn-recovery-enable");
+  const elBtnRecoveryCancel = $("btn-recovery-cancel");
+  let currentRecoveryKey = "";
+
+  if (elNavRecovery) {
+    elNavRecovery.addEventListener("click", (e) => {
+      e.preventDefault();
+      currentRecoveryKey = SentryCrypto.generateRecoveryKey();
+      elRecoveryKeyValue.textContent = currentRecoveryKey;
+      elRecoveryKeyBox.style.display = "block";
+      elRecoveryConfirm.checked = false;
+      elBtnRecoveryEnable.disabled = true;
+      elRecoveryModal.classList.add("open");
+    });
+    elBtnRecoveryCancel.addEventListener("click", () => elRecoveryModal.classList.remove("open"));
+    elRecoveryConfirm.addEventListener("change", () => { elBtnRecoveryEnable.disabled = !elRecoveryConfirm.checked; });
+    elBtnCopyRecovery.addEventListener("click", () => {
+      navigator.clipboard.writeText(currentRecoveryKey).then(() => showToast("Recovery key copied.", "success"));
+    });
+    elBtnRecoveryEnable.addEventListener("click", async () => {
+      try {
+        elBtnRecoveryEnable.disabled = true;
+        const salt = SentryCrypto.randomSalt();
+        const rec = await SentryCrypto.deriveRecovery(currentRecoveryKey, salt);
+        const blob = await SentryCrypto.wrapBytes(encKeyBytes, rec.wrapKey);
+        const res = await fetch("/api/recovery/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": sessionToken },
+          body: JSON.stringify({
+            salt: SentryCrypto.bytesToBase64(salt),
+            blob,
+            authKey: rec.authKey,
+            email: elRecoveryEmail.value.trim(),
+            phone: elRecoveryPhone.value.trim()
+          })
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "setup failed"); }
+        showToast("Recovery enabled — keep your recovery key safe!", "success");
+        elRecoveryModal.classList.remove("open");
+      } catch (err) {
+        showToast(err.message || "Couldn't enable recovery.", "error");
+        elBtnRecoveryEnable.disabled = false;
+      }
+    });
+  }
 });

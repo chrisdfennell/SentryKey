@@ -126,6 +126,69 @@ const SentryCrypto = (() => {
     return { authKey, encKey };
   }
 
+  // --- Zero-Knowledge Account Recovery ---
+
+  /** A readable one-time recovery key (~100 bits), e.g. ABCDE-FGHJK-LMNPQ-RSTUV. */
+  function generateRecoveryKey() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
+    const bytes = window.crypto.getRandomValues(new Uint8Array(20));
+    let out = "";
+    for (let i = 0; i < bytes.length; i++) {
+      out += alphabet[bytes[i] % alphabet.length];
+      if ((i + 1) % 5 === 0 && i < bytes.length - 1) out += "-";
+    }
+    return out;
+  }
+
+  function randomSalt() {
+    return window.crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  }
+
+  /**
+   * Derives a wrapping key (stays on device) and an auth key (proves possession
+   * to the server) from a recovery key + salt. Mirrors deriveUserKeys.
+   * @returns {Promise<{ wrapKey: Uint8Array, authKey: string }>}
+   */
+  async function deriveRecovery(recoveryKey, saltBytes) {
+    const encoder = new TextEncoder();
+    const normalized = recoveryKey.replace(/[\s-]/g, "").toUpperCase();
+    const base = await window.crypto.subtle.importKey(
+      "raw", encoder.encode(normalized), { name: KDF_ALGO }, false, ["deriveBits"]
+    );
+    const masterBuf = await window.crypto.subtle.deriveBits(
+      { name: KDF_ALGO, salt: saltBytes, iterations: DEFAULT_ITERATIONS, hash: HASH_ALGO },
+      base, KEY_LENGTH
+    );
+    const hmacKey = await window.crypto.subtle.importKey(
+      "raw", masterBuf, { name: "HMAC", hash: { name: HASH_ALGO } }, false, ["sign"]
+    );
+    const wrapBuf = await window.crypto.subtle.sign("HMAC", hmacKey, encoder.encode("recovery-wrap"));
+    const authBuf = await window.crypto.subtle.sign("HMAC", hmacKey, encoder.encode("recovery-auth"));
+    return { wrapKey: new Uint8Array(wrapBuf), authKey: bytesToHex(new Uint8Array(authBuf)) };
+  }
+
+  /** AES-GCM wrap of raw key bytes; returns base64(iv || ciphertext+tag). */
+  async function wrapBytes(plainBytes, wrapKeyBytes) {
+    const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    const key = await window.crypto.subtle.importKey("raw", wrapKeyBytes, { name: CIPHER_ALGO }, false, ["encrypt"]);
+    const ct = await window.crypto.subtle.encrypt({ name: CIPHER_ALGO, iv: iv, tagLength: TAG_LENGTH }, key, plainBytes);
+    const ctBytes = new Uint8Array(ct);
+    const combined = new Uint8Array(iv.length + ctBytes.length);
+    combined.set(iv, 0);
+    combined.set(ctBytes, iv.length);
+    return bytesToBase64(combined);
+  }
+
+  /** Reverses wrapBytes. Throws if the wrap key is wrong. */
+  async function unwrapBytes(blobB64, wrapKeyBytes) {
+    const combined = base64ToBytes(blobB64);
+    const iv = combined.slice(0, IV_LENGTH);
+    const ct = combined.slice(IV_LENGTH);
+    const key = await window.crypto.subtle.importKey("raw", wrapKeyBytes, { name: CIPHER_ALGO }, false, ["decrypt"]);
+    const plain = await window.crypto.subtle.decrypt({ name: CIPHER_ALGO, iv: iv, tagLength: TAG_LENGTH }, key, ct);
+    return new Uint8Array(plain);
+  }
+
   // --- Encryption/Decryption ---
 
   /**
@@ -297,6 +360,11 @@ const SentryCrypto = (() => {
     deriveUserKeys,
     encryptWithKey,
     decryptWithKey,
+    generateRecoveryKey,
+    randomSalt,
+    deriveRecovery,
+    wrapBytes,
+    unwrapBytes,
     bytesToBase64,
     base64ToBytes,
     bytesToHex

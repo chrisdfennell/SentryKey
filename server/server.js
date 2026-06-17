@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { rateLimit } = require('express-rate-limit');
+const notify = require('./notify');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -232,6 +233,178 @@ app.get('/api/ping', authenticateSession, (req, res) => {
 // Check if Server Access Passphrase is required for registration
 app.get('/api/auth/config', (req, res) => {
   res.json({ registrationRestricted: !!SERVER_ACCESS_PASSPHRASE });
+});
+
+// --- Zero-Knowledge Account Recovery ---
+// The client wraps its encryption key under a one-time RECOVERY KEY (held only by
+// the user) and proves possession via a derived recoveryAuthKey. The server stores
+// only the wrapped blob + a hash of the auth key — it can't decrypt anything.
+// Email/SMS (notify.js) are an OPTIONAL second factor; with no provider configured
+// the recovery key alone is sufficient. See notify.js.
+
+function sha256(s) { return crypto.createHash('sha256').update(s).digest('hex'); }
+function maskEmail(e) { const [u, d] = String(e).split('@'); return (u ? u[0] : '') + '***@' + (d || ''); }
+function maskPhone(p) { const s = String(p); return '***' + s.slice(-4); }
+
+// Channels available for a user (email/sms on file AND provider configured).
+function recoveryChannels(user) {
+  const ch = [];
+  if (user.email && notify.emailEnabled) ch.push('email');
+  if (user.phone && notify.smsEnabled) ch.push('sms');
+  return ch;
+}
+
+// Newest stored backup ciphertext for a user, or null.
+function latestBackupContent(username) {
+  try {
+    const dir = path.join(BACKUPS_DIR, username);
+    if (!fs.existsSync(dir)) return null;
+    const files = fs.readdirSync(dir)
+      .filter(f => f.startsWith('backup-') && f.endsWith('.skbackup'))
+      .map(f => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.m - a.m);
+    if (!files.length) return null;
+    return fs.readFileSync(path.join(dir, files[0].f), 'utf8');
+  } catch (_) { return null; }
+}
+
+// Writes a SentryKey envelope as a new backup for the user.
+function writeBackupForUser(username, envelopeObj) {
+  const userDir = path.join(BACKUPS_DIR, username);
+  if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const ymd = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const hms = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const filename = `backup-${ymd}-${hms}.skbackup`;
+  fs.writeFileSync(path.join(userDir, filename), JSON.stringify(envelopeObj, null, 2), 'utf8');
+  pruneOldBackups(username);
+  return filename;
+}
+
+// Enroll recovery for the logged-in user (client computed the wrap + auth key).
+app.post('/api/recovery/setup', authLimiter, authenticateSession, (req, res) => {
+  const { salt, blob, authKey, email, phone } = req.body;
+  if (!salt || !blob || !authKey) {
+    return res.status(400).json({ error: 'salt, blob and authKey are required.' });
+  }
+  const db = loadDb();
+  const user = db.users[req.username];
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const authSalt = crypto.randomBytes(16).toString('hex');
+  user.recovery = {
+    salt,
+    blob,
+    authSalt,
+    authHash: crypto.scryptSync(authKey, authSalt, 64).toString('hex')
+  };
+  if (email !== undefined) user.email = String(email).trim() || undefined;
+  if (phone !== undefined) user.phone = String(phone).trim() || undefined;
+  delete user.recoveryOtp;
+  saveDb(db);
+  res.json({ message: 'Recovery enabled.', channels: recoveryChannels(user) });
+});
+
+// Begin recovery: if an OTP channel is configured, send a code; else proceed.
+app.post('/api/recovery/start', authLimiter, async (req, res) => {
+  const cleanUsername = String(req.body.username || '').trim().toLowerCase();
+  const db = loadDb();
+  const user = db.users[cleanUsername];
+  if (!user || !user.recovery) {
+    return res.status(404).json({ error: 'No recovery is set up for this account.' });
+  }
+  const channels = recoveryChannels(user);
+  if (channels.length === 0) {
+    return res.json({ otpRequired: false });
+  }
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  user.recoveryOtp = { hash: sha256(otp), exp: Date.now() + 5 * 60 * 1000, attempts: 0 };
+  saveDb(db);
+  const sentTo = [];
+  try {
+    if (channels.includes('email')) { await notify.sendEmail(user.email, 'SentryKey recovery code', `Your SentryKey recovery code is ${otp}. It expires in 5 minutes.`); sentTo.push(maskEmail(user.email)); }
+    if (channels.includes('sms')) { await notify.sendSms(user.phone, `SentryKey recovery code: ${otp} (expires in 5 min)`); sentTo.push(maskPhone(user.phone)); }
+  } catch (err) {
+    console.error('Recovery send failed:', err.message);
+    return res.status(502).json({ error: 'Could not send the recovery code. Try again later.' });
+  }
+  res.json({ otpRequired: true, sentTo });
+});
+
+function otpOk(user, otp) {
+  const o = user.recoveryOtp;
+  if (!o) return false;
+  if (Date.now() > o.exp || o.attempts >= 5) return false;
+  o.attempts += 1;
+  return sha256(String(otp || '')) === o.hash;
+}
+
+// Return the wrapped recovery material (+ latest vault) for the client to unwrap.
+app.post('/api/recovery/fetch', authLimiter, (req, res) => {
+  const cleanUsername = String(req.body.username || '').trim().toLowerCase();
+  const db = loadDb();
+  const user = db.users[cleanUsername];
+  if (!user || !user.recovery) return res.status(404).json({ error: 'No recovery on file.' });
+  if (recoveryChannels(user).length > 0) {
+    if (!otpOk(user, req.body.otp)) { saveDb(db); return res.status(401).json({ error: 'Invalid or expired code.' }); }
+    saveDb(db);
+  }
+  res.json({ salt: user.recovery.salt, blob: user.recovery.blob, vault: latestBackupContent(cleanUsername) });
+});
+
+// Finalize recovery: prove the recovery key, rotate login + recovery, store the
+// re-encrypted vault, and hand back a fresh session.
+app.post('/api/recovery/reset', authLimiter, (req, res) => {
+  const cleanUsername = String(req.body.username || '').trim().toLowerCase();
+  const { recoveryAuthKey, otp, newAuthKey, newRecovery, vault } = req.body;
+  const db = loadDb();
+  const user = db.users[cleanUsername];
+  if (!user || !user.recovery) return res.status(404).json({ error: 'No recovery on file.' });
+  if (!recoveryAuthKey || !newAuthKey || !newRecovery || !newRecovery.salt || !newRecovery.blob || !newRecovery.authKey) {
+    return res.status(400).json({ error: 'Missing recovery reset fields.' });
+  }
+  if (recoveryChannels(user).length > 0 && !otpOk(user, otp)) {
+    saveDb(db);
+    return res.status(401).json({ error: 'Invalid or expired code.' });
+  }
+  // Verify the user actually holds the recovery key.
+  const expected = crypto.scryptSync(recoveryAuthKey, user.recovery.authSalt, 64).toString('hex');
+  if (expected !== user.recovery.authHash) {
+    return res.status(401).json({ error: 'Invalid recovery key.' });
+  }
+
+  // Rotate the login credential to the new master password's auth key.
+  const salt = crypto.randomBytes(16).toString('hex');
+  user.salt = salt;
+  user.hash = crypto.scryptSync(newAuthKey, salt, 64).toString('hex');
+
+  // Rotate the recovery material (re-wrapped under the new encryption key).
+  const authSalt = crypto.randomBytes(16).toString('hex');
+  user.recovery = {
+    salt: newRecovery.salt,
+    blob: newRecovery.blob,
+    authSalt,
+    authHash: crypto.scryptSync(newRecovery.authKey, authSalt, 64).toString('hex')
+  };
+  delete user.recoveryOtp;
+
+  // Store the re-encrypted vault (optional — only if the client had one).
+  if (vault) {
+    try {
+      const env = typeof vault === 'string' ? JSON.parse(vault) : vault;
+      if (env && env.app === 'SentryKey' && env.encrypted && env.ciphertext) {
+        writeBackupForUser(cleanUsername, env);
+      }
+    } catch (_) { /* ignore a malformed vault */ }
+  }
+
+  // Issue a fresh session.
+  const token = crypto.randomBytes(32).toString('hex');
+  db.sessions[token] = { username: cleanUsername, createdAt: Date.now() };
+  saveDb(db);
+  console.log(`Recovery reset for: ${cleanUsername}`);
+  res.json({ message: 'Recovery successful.', token, username: cleanUsername });
 });
 
 // --- User-Sandboxed Backup API Endpoints ---

@@ -33,6 +33,7 @@
 
       <nav class="sidebar-nav">
         <a href="#" class="nav-item active" id="nav-vault"><span style="font-size: 16px;">🔑</span> My Vault</a>
+        <a href="#" class="nav-item" id="nav-recovery"><span style="font-size: 16px;">🛟</span> Account Recovery</a>
         <a href="/" class="nav-item" id="nav-home"><span style="font-size: 16px;">🏠</span> Home Page</a>
         <a href="/privacy.html" class="nav-item" id="nav-privacy"><span style="font-size: 16px;">🛡️</span> Privacy Policy</a>
       </nav>
@@ -189,6 +190,45 @@
           <button type="submit" class="btn btn-primary" id="btn-save-passphrase-submit">Encrypt & Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Account Recovery Setup Modal -->
+  <div id="recovery-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <div class="modal-icon">🛟</div>
+        <div class="modal-title"><h2>Account Recovery</h2></div>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
+          Because your vault is zero-knowledge, no one — not even this server — can reset your
+          master password. A <strong>recovery key</strong> is your only safety net. Save it somewhere safe.
+        </p>
+
+        <div id="recovery-keybox" style="display:none; margin-bottom:16px;">
+          <label style="display:block; font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Your recovery key</label>
+          <div id="recovery-key-value" style="font-family:'Outfit',monospace; font-size:20px; font-weight:700; letter-spacing:2px; color:var(--orange); background:rgba(16,18,26,0.9); border:1px solid var(--card-border); border-radius:10px; padding:16px; text-align:center; user-select:all;"></div>
+          <button class="btn btn-secondary" id="btn-copy-recovery" style="width:100%; margin-top:10px;">📋 Copy recovery key</button>
+        </div>
+
+        <div class="form-group">
+          <label for="recovery-email">Email <span style="text-transform:none; color:var(--text-muted);">(optional — for a recovery code 2nd factor later)</span></label>
+          <input type="email" id="recovery-email" class="input-field" placeholder="you@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="recovery-phone">Phone <span style="text-transform:none; color:var(--text-muted);">(optional, e.g. +15551234567)</span></label>
+          <input type="tel" id="recovery-phone" class="input-field" placeholder="+15551234567" />
+        </div>
+
+        <label style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary); cursor:pointer;" id="recovery-confirm-wrap">
+          <input type="checkbox" id="recovery-confirm" /> I've saved my recovery key somewhere safe.
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-recovery-cancel">Close</button>
+        <button type="button" class="btn btn-primary" id="btn-recovery-enable" disabled>Enable recovery</button>
+      </div>
     </div>
   </div>
 
