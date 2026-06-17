@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var search = ""
     @State private var qrAccount: TwoFactorAccount?
     @State private var importing = false
+    @State private var showCloud = false
     @State private var restoreMessage: String?
     @AppStorage("app_lock_enabled") private var appLockEnabled = false
 
@@ -93,6 +94,9 @@ struct ContentView: View {
                             importing = true
                         } label: { Label("Import vault", systemImage: "square.and.arrow.down") }
                         Button {
+                            showCloud = true
+                        } label: { Label("Cloud Backup", systemImage: "icloud") }
+                        Button {
                             syncPassInput = sync.getSyncPassphrase()
                             showSyncPass = true
                         } label: {
@@ -116,6 +120,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAdd) {
                 AddAccountView()
+            }
+            .sheet(isPresented: $showCloud) {
+                CloudBackupSheet().environmentObject(vault)
             }
             .sheet(item: $qrAccount) { account in
                 AccountQRSheet(account: account)

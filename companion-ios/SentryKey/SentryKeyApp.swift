@@ -13,9 +13,16 @@ struct SentryKeyApp: App {
     var body: some Scene {
         WindowGroup {
             AppLockGate {
-                ContentView()
-                    .environmentObject(vault)
-                    .environmentObject(sync)
+                // Cloud login on open (when not signed in); else straight into the app.
+                CloudAuthGate {
+                    ContentView()
+                        .environmentObject(vault)
+                        .environmentObject(sync)
+                        // Silent cloud auto-backup whenever the vault changes.
+                        .onChange(of: vault.accounts) { newAccounts in
+                            CloudSync.autoBackup(accounts: newAccounts)
+                        }
+                }
             }
             .preferredColorScheme(.dark)
             .onOpenURL { url in
