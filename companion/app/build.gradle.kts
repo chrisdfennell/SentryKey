@@ -113,6 +113,7 @@ dependencies {
     implementation(libs.play.services.code.scanner)
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
     implementation(libs.coil.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

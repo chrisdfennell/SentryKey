@@ -1,5 +1,6 @@
 package com.example.sentrykey
 
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import java.security.MessageDigest
  * so repeated triggers / background runs don't spam the server.
  */
 class AutoSyncManager(
+    private val context: Context,
     private val vaultStorage: VaultStorage,
     private val syncManager: GarminSyncManager,
     private val onStatus: (String) -> Unit = {}
@@ -68,10 +70,12 @@ class AutoSyncManager(
         }
     }
 
-    /** Best-effort push to the watch (silent in auto mode; encrypted if a sync passphrase is set). */
+    /** Best-effort push to paired watches (Garmin + Wear OS). Silent in auto mode. */
     private fun pushToWatch(accounts: List<TwoFactorAccount>) {
         if (accounts.isEmpty()) return
         val raw = vaultStorage.toVaultString(accounts)
+
+        // Garmin (optionally encrypted with the sync passphrase).
         val pass = vaultStorage.getSyncPassphrase()
         val payload = if (pass.isNotEmpty()) SyncCrypto.encrypt(raw, pass) else raw
         try {
@@ -83,6 +87,9 @@ class AutoSyncManager(
         } catch (e: Exception) {
             // ignore — auto mode is best-effort
         }
+
+        // Wear OS (plaintext over the Data Layer's secure transport).
+        WearSyncManager.push(context, raw)
     }
 
     private fun sha256(s: String): String =

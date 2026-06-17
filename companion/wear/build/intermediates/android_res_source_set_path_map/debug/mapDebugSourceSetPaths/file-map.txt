@@ -1,0 +1,8 @@
+com.fennell.sentrykey.wear-pngs-0 C:\programming\SentryKey\companion\wear\build\generated\res\pngs\debug
+com.fennell.sentrykey.wear-updated_navigation_xml-1 C:\programming\SentryKey\companion\wear\build\generated\updated_navigation_xml\debug
+com.fennell.sentrykey.wear-packageDebugResources-2 C:\programming\SentryKey\companion\wear\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.fennell.sentrykey.wear-packageDebugResources-3 C:\programming\SentryKey\companion\wear\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.fennell.sentrykey.wear-debug-4 C:\programming\SentryKey\companion\wear\build\intermediates\merged_res\debug\mergeDebugResources
+com.fennell.sentrykey.wear-debug-5 C:\programming\SentryKey\companion\wear\src\debug\res
+com.fennell.sentrykey.wear-main-6 C:\programming\SentryKey\companion\wear\src\main\res
+gradleHome-0 C:\Users\christopher.fennell\.gradle

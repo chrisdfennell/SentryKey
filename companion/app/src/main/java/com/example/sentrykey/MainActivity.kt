@@ -336,7 +336,7 @@ fun SentryKeyDashboard(
 
     // Auto-sync: silently back up to cloud + push to watch after any vault change.
     val autoSync = remember {
-        AutoSyncManager(vaultStorage, syncManager) { msg ->
+        AutoSyncManager(context, vaultStorage, syncManager) { msg ->
             (context as? android.app.Activity)?.runOnUiThread {
                 syncStatus = msg
                 syncStatusColor = Color(0xFF22C55E)
@@ -740,6 +740,8 @@ fun SentryKeyDashboard(
                         Button(
                             onClick = {
                                 val raw = vaultStorage.toVaultString(accounts)
+                                // Also push to any paired Wear OS watch.
+                                WearSyncManager.push(context, raw)
                                 // Encrypt the BLE payload if a sync passphrase is set
                                 // (watch decrypts with the same passphrase); else plaintext.
                                 val syncPass = vaultStorage.getSyncPassphrase()

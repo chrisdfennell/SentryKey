@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "SentryKey"
 include(":app")
+include(":wear")
  

@@ -18,7 +18,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
             val vault = VaultStorage(applicationContext)
             if (!vault.isCloudSignedIn()) return Result.success()
             // GarminSyncManager is constructed but never used here (cloud-only path).
-            val auto = AutoSyncManager(vault, GarminSyncManager(applicationContext))
+            val auto = AutoSyncManager(applicationContext, vault, GarminSyncManager(applicationContext))
             auto.backupToCloud(vault.getAccounts())
             Result.success()
         } catch (e: Exception) {
