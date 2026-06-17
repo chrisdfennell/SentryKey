@@ -7,6 +7,7 @@ on:
       - "v*"
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:   # lets you build the Play AAB on demand from the Actions tab
 
 permissions:
   contents: write
@@ -87,6 +88,16 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Compute version
+        run: |
+          # versionCode = monotonic CI run number; versionName from the tag (vX.Y.Z) or a dev default.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_NAME=1.0.0-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          fi
+          echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
       - name: Build Android App
         run: |
           cd companion
@@ -142,6 +153,60 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
+
+  build-android-play:
+    name: Build Play Release Bundle (AAB)
+    runs-on: ubuntu-latest
+    # Runs on version tags (release flow) or a manual "Run workflow" click.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Compute version
+        run: |
+          # Play REQUIRES a higher versionCode on every upload; the CI run number guarantees that.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_NAME=1.0.0" >> "$GITHUB_ENV"
+          fi
+          echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Decode upload keystore
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE" ]; then
+            echo "::error::RELEASE_KEYSTORE secret is not set — add the upload-keystore secrets before building a Play bundle." >&2
+            exit 1
+          fi
+          echo "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+
+      - name: Build signed Play AAB
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          cd companion
+          chmod +x gradlew
+          ./gradlew bundlePlayRelease
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentrykey-play-release-aab
+          path: companion/app/build/outputs/bundle/playRelease/app-play-release.aab
 
   create-release:
     name: Publish GitHub Release
