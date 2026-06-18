@@ -13,6 +13,40 @@ permissions:
   contents: write
 
 jobs:
+  test-server:
+    name: Test Server (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps + run server tests
+        run: |
+          cd server
+          npm ci
+          npm test
+
+  test-android:
+    name: Test Android (unit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Run JVM unit tests
+        run: |
+          cd companion
+          chmod +x gradlew
+          ./gradlew testGithubDebugUnitTest
+
   build-garmin:
     name: Build Garmin Watch App
     runs-on: ubuntu-latest
@@ -93,6 +127,7 @@ jobs:
 
   build-android:
     name: Build Android Companion App
+    needs: [test-android]
     runs-on: ubuntu-latest
 
     steps:
@@ -174,6 +209,7 @@ jobs:
 
   build-android-play:
     name: Build Play Release Bundle (AAB)
+    needs: [test-android]
     runs-on: ubuntu-latest
     # Runs on version tags (release flow) or a manual "Run workflow" click.
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

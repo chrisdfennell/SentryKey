@@ -101,6 +101,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // Pure-JVM unit tests; return defaults for any incidental Android stub call.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

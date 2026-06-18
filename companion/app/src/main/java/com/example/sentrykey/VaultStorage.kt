@@ -175,23 +175,28 @@ class VaultStorage(context: Context) {
     fun getLastSyncHash(): String = prefs.getString(lastSyncHashKey, "") ?: ""
     fun setLastSyncHash(hash: String) { prefs.edit().putString(lastSyncHashKey, hash).apply() }
 
-    // Parses the watch vault string "label:secret,label:secret". Each entry is
-    // split on its LAST colon (labels may contain colons; a Base32 secret never
-    // does), mirroring the watch's parseVaultString. Used by watch -> phone
+    // Parses the watch vault string "label:secret,label:secret". Delegates to the
+    // top-level parseVaultString (pure logic, unit-tested). Used by watch -> phone
     // recovery.
-    fun fromVaultString(vaultString: String): List<TwoFactorAccount> {
-        val out = ArrayList<TwoFactorAccount>()
-        if (vaultString.isBlank()) return out
-        for (rawPair in vaultString.split(",")) {
-            val pair = rawPair.trim()
-            val colon = pair.lastIndexOf(':')
-            if (colon <= 0) continue
-            val label = pair.substring(0, colon).trim()
-            val secret = pair.substring(colon + 1).trim()
-            if (label.isNotEmpty() && secret.isNotEmpty()) {
-                out.add(TwoFactorAccount(label, secret))
-            }
+    fun fromVaultString(vaultString: String): List<TwoFactorAccount> = parseVaultString(vaultString)
+}
+
+// Pure parser for the watch vault string "label:secret,label:secret". Each entry
+// is split on its LAST colon (labels may contain colons; a Base32 secret never
+// does), mirroring the watch's parseVaultString. Kept as a top-level function so
+// it can be unit-tested without an Android Context.
+fun parseVaultString(vaultString: String): List<TwoFactorAccount> {
+    val out = ArrayList<TwoFactorAccount>()
+    if (vaultString.isBlank()) return out
+    for (rawPair in vaultString.split(",")) {
+        val pair = rawPair.trim()
+        val colon = pair.lastIndexOf(':')
+        if (colon <= 0) continue
+        val label = pair.substring(0, colon).trim()
+        val secret = pair.substring(colon + 1).trim()
+        if (label.isNotEmpty() && secret.isNotEmpty()) {
+            out.add(TwoFactorAccount(label, secret))
         }
-        return out
     }
+    return out
 }

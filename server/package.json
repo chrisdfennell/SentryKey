@@ -4,7 +4,8 @@
   "description": "VPS backup server and web landing/dashboard for SentryKey",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test_crypto.js && node test_server.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
