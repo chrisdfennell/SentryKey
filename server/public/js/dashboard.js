@@ -502,6 +502,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   // ACCOUNT RECOVERY SETUP
   // ==========================================================================
+  // Account modal — plan + usage from /api/account.
+  const elNavAccount = $("nav-account");
+  const elAccountModal = $("account-modal");
+  if (elNavAccount && elAccountModal) {
+    $("btn-account-close").addEventListener("click", () => elAccountModal.classList.remove("open"));
+    elNavAccount.addEventListener("click", async (e) => {
+      e.preventDefault();
+      elAccountModal.classList.add("open");
+      try {
+        const res = await fetch("/api/account", { headers: { "X-Session-Token": sessionToken } });
+        if (!res.ok) throw new Error("fetch failed");
+        const a = await res.json();
+        $("account-username").textContent = a.username || username;
+        $("account-plan-badge").textContent = a.planLabel || "Free";
+        $("account-since").textContent = a.createdAt ? new Date(a.createdAt).toLocaleDateString() : "—";
+        $("account-backups").textContent = `${a.backups?.count ?? 0}${a.backups?.max ? " / " + a.backups.max : ""}`;
+        $("account-storage").textContent = fmtBytes(a.backups?.bytes ?? 0);
+      } catch (_) {
+        $("account-plan-badge").textContent = "Free";
+      }
+    });
+  }
+  function fmtBytes(n) {
+    if (!n) return "0 KB";
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+    return (n / 1048576).toFixed(2) + " MB";
+  }
+
   const elNavRecovery = $("nav-recovery");
   const elRecoveryModal = $("recovery-modal");
   const elRecoveryKeyBox = $("recovery-keybox");

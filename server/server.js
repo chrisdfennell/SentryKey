@@ -13,6 +13,15 @@ const PORT = process.env.PORT || 3000;
 const SERVER_ACCESS_PASSPHRASE = process.env.SERVER_ACCESS_PASSPHRASE;
 const MAX_BACKUPS_RETAINED = parseInt(process.env.MAX_BACKUPS_RETAINED || '15', 10);
 
+// Subscription tiers — groundwork for future paid cloud plans (no billing yet).
+// Everyone is "free" today; a user's plan is stored on their account record
+// (absent = free). "pro" simply retains more backups for now.
+const PLANS = {
+  free: { label: 'Free', maxBackups: MAX_BACKUPS_RETAINED },
+  pro:  { label: 'Pro',  maxBackups: 100 },
+};
+function planInfo(plan) { return PLANS[plan] || PLANS.free; }
+
 const BACKUPS_DIR = process.env.BACKUPS_DIR || path.join(__dirname, 'backups');
 const DB_DIR = process.env.DB_DIR || path.join(__dirname, 'db');
 const LEGACY_DB_FILE = path.join(DB_DIR, 'users.json');
@@ -73,8 +82,10 @@ const pruneOldBackups = (username) => {
       })
       .sort((a, b) => b.mtime - a.mtime); // Newest first
 
-    if (files.length > MAX_BACKUPS_RETAINED) {
-      const toDelete = files.slice(MAX_BACKUPS_RETAINED);
+    // Retain count depends on the user's plan (free vs pro).
+    const maxBackups = planInfo((store.getUser(username) || {}).plan).maxBackups;
+    if (files.length > maxBackups) {
+      const toDelete = files.slice(maxBackups);
       toDelete.forEach(file => {
         fs.unlinkSync(file.path);
         console.log(`Pruned old backup for [${username}]: ${file.name}`);
@@ -142,6 +153,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     store.putUser(cleanUsername, {
       salt,
       hash,
+      plan: 'free',
       createdAt: Date.now()
     });
 
@@ -217,6 +229,33 @@ app.get('/api/ping', authenticateSession, (req, res) => {
 // Check if Server Access Passphrase is required for registration
 app.get('/api/auth/config', (req, res) => {
   res.json({ registrationRestricted: !!SERVER_ACCESS_PASSPHRASE });
+});
+
+// Authenticated account overview: plan, usage, and limits. Returns only counts
+// and sizes — never secret content — so it stays zero-knowledge.
+app.get('/api/account', apiLimiter, authenticateSession, (req, res) => {
+  const user = store.getUser(req.username) || {};
+  const plan = user.plan || 'free';
+  const info = planInfo(plan);
+  let count = 0, bytes = 0;
+  try {
+    const dir = path.join(BACKUPS_DIR, req.username);
+    if (fs.existsSync(dir)) {
+      for (const f of fs.readdirSync(dir)) {
+        if (f.startsWith('backup-') && f.endsWith('.skbackup')) {
+          count += 1;
+          bytes += fs.statSync(path.join(dir, f)).size;
+        }
+      }
+    }
+  } catch (_) { /* best effort */ }
+  res.json({
+    username: req.username,
+    plan,
+    planLabel: info.label,
+    createdAt: user.createdAt || null,
+    backups: { count, bytes, max: info.maxBackups },
+  });
 });
 
 // --- Zero-Knowledge Account Recovery ---

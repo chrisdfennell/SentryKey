@@ -46,6 +46,11 @@ test('register, add an account, and it survives a reload (cloud round-trip)', as
   await page.reload();
   await expect(page.locator('.account-card')).toHaveCount(1);
   await expect(page.locator('.account-card')).toContainText(/github/i);
+
+  // --- Account panel surfaces the plan + usage ---
+  await page.click('#nav-account');
+  await expect(page.locator('#account-plan-badge')).toHaveText('Free');
+  await expect(page.locator('#account-backups')).toContainText('1');
 });
 
 // The secret must never appear in plaintext over the wire (zero-knowledge).

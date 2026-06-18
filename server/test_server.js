@@ -78,6 +78,9 @@ async function phaseFresh() {
     const dl = await fetch(`${base}/api/backups/file/${list.body.backups[0].filename}`, { headers: auth });
     check('download matches ciphertext', (await dl.json()).ciphertext === 'deadbeef');
 
+    const account = await jget(base, '/api/account', auth);
+    check('account -> free plan + 1 backup', account.body?.plan === 'free' && account.body?.planLabel === 'Free' && account.body?.backups?.count === 1);
+
     check('recovery setup -> channels []', (await jpost(base, '/api/recovery/setup', { salt: 'rs', blob: 'rb', authKey: 'rauth' }, auth)).body?.channels?.length === 0);
     check('recovery start -> otpRequired false', (await jpost(base, '/api/recovery/start', { username: u })).body?.otpRequired === false);
     const fetchR = await jpost(base, '/api/recovery/fetch', { username: u });

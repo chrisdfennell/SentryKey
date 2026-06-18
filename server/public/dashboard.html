@@ -33,6 +33,7 @@
 
       <nav class="sidebar-nav">
         <a href="#" class="nav-item active" id="nav-vault"><span style="font-size: 16px;">🔑</span> My Vault</a>
+        <a href="#" class="nav-item" id="nav-account"><span style="font-size: 16px;">👤</span> Account</a>
         <a href="#" class="nav-item" id="nav-recovery"><span style="font-size: 16px;">🛟</span> Account Recovery</a>
         <a href="/" class="nav-item" id="nav-home"><span style="font-size: 16px;">🏠</span> Home Page</a>
         <a href="/privacy.html" class="nav-item" id="nav-privacy"><span style="font-size: 16px;">🛡️</span> Privacy Policy</a>
@@ -233,6 +234,27 @@
   </div>
 
   <!-- Toast Container -->
+  <!-- Account (plan + usage) -->
+  <div id="account-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <div class="modal-icon">👤</div>
+        <div class="modal-title"><h2>Account</h2></div>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Username</span><strong id="account-username">—</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Plan</span><span id="account-plan-badge" style="background:var(--orange-gradient); color:#07080B; font-weight:700; font-size:12px; padding:3px 12px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px;">Free</span></div>
+        <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Member since</span><strong id="account-since">—</strong></div>
+        <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Cloud backups</span><strong id="account-backups">—</strong></div>
+        <div style="display:flex; justify-content:space-between; padding:10px 0; font-size:14px;"><span style="color:var(--text-secondary);">Storage used</span><strong id="account-storage">—</strong></div>
+        <p style="color:var(--text-secondary); font-size:12px; margin-top:16px;">Self-hosting SentryKey is free forever. Managed paid cloud plans are coming.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-account-close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-notification" class="toast">Action Complete</div>
 
   <!-- Scripts -->
