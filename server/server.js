@@ -274,6 +274,8 @@ app.get('/api/admin/users', apiLimiter, authenticateSession, requireAdmin, (req,
     suspended: !!u.suspended,
     createdAt: u.createdAt || null,
     hasRecovery: !!u.recovery,
+    hasPhone: !!u.phone,
+    hasEmail: !!u.email,
     backups: backupUsage(u.username),
   })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   res.json({ users, plans: Object.keys(PLANS) });
@@ -314,6 +316,8 @@ app.get('/api/admin/server', apiLimiter, authenticateSession, requireAdmin, (req
     node: process.version,
     uptimeSeconds: Math.floor(process.uptime()),
     registrationRestricted: !!SERVER_ACCESS_PASSPHRASE,
+    smsEnabled: notify.smsEnabled,
+    emailEnabled: notify.emailEnabled,
     plans: PLANS,
     users: store.countUsers(),
     sessions: store.countSessions(),

@@ -613,6 +613,38 @@ document.addEventListener("DOMContentLoaded", () => {
     elBtnCopyRecovery.addEventListener("click", () => {
       navigator.clipboard.writeText(currentRecoveryKey).then(() => showToast("Recovery key copied.", "success"));
     });
+    const elBtnDownloadKit = $("btn-download-kit");
+    if (elBtnDownloadKit) elBtnDownloadKit.addEventListener("click", () => {
+      const kit = [
+        "SentryKey — Emergency Kit",
+        "==========================",
+        "",
+        "Keep this somewhere safe (a password manager, a printed copy, a secure drive).",
+        "It is the ONLY way to recover your vault if you forget your master password —",
+        "SentryKey is zero-knowledge, so nobody, not even the server, can reset it for you.",
+        "",
+        "Account:       " + username,
+        "Server:        " + location.origin,
+        "Recovery key:  " + currentRecoveryKey,
+        "Created:       " + new Date().toLocaleString(),
+        "",
+        "To recover:",
+        "  1. Go to " + location.origin + "/login.html",
+        "  2. Click \"Forgot your master password?\"",
+        "  3. Enter your username, this recovery key, and a new master password.",
+        ""
+      ].join("\n");
+      const blob = new Blob([kit], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "SentryKey-Emergency-Kit.txt";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Emergency Kit downloaded — store it safely.", "success");
+      // Downloading counts as saving it — unlock the Enable button.
+      elRecoveryConfirm.checked = true;
+      elBtnRecoveryEnable.disabled = false;
+    });
     elBtnRecoveryEnable.addEventListener("click", async () => {
       try {
         elBtnRecoveryEnable.disabled = true;

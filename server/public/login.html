@@ -164,8 +164,9 @@
           <input type="text" id="rec-otp" class="input-field" placeholder="6-digit code" inputmode="numeric" />
         </div>
         <div class="form-group">
-          <label for="rec-key">Recovery key</label>
+          <label for="rec-key">Recovery key <span style="text-transform:none; font-weight:400;">— <a href="#" id="rec-upload-link" style="color:var(--orange);">upload Emergency Kit</a></span></label>
           <input type="text" id="rec-key" class="input-field" placeholder="ABCDE-FGHJK-LMNPQ-RSTUV" autocomplete="off" />
+          <input type="file" id="rec-kit-file" accept=".txt" style="display:none;" />
         </div>
         <div class="form-group">
           <label for="rec-new-pass">New master password</label>
@@ -365,6 +366,23 @@
       const modal = $("recover-modal");
       $("link-forgot").addEventListener("click", (e) => { e.preventDefault(); modal.classList.add("open"); });
       $("btn-rec-cancel").addEventListener("click", () => modal.classList.remove("open"));
+
+      // Upload Emergency Kit -> extract the recovery key into the field.
+      const elKitLink = $("rec-upload-link"), elKitFile = $("rec-kit-file");
+      if (elKitLink && elKitFile) {
+        elKitLink.addEventListener("click", (e) => { e.preventDefault(); elKitFile.click(); });
+        elKitFile.addEventListener("change", (e) => {
+          const file = e.target.files[0]; if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const m = String(ev.target.result).match(/Recovery key:\s*([^\r\n]+)/i);
+            if (m) { $("rec-key").value = m[1].trim(); showToast("Emergency Kit loaded.", "success"); }
+            else showToast("Couldn't find a recovery key in that file.", "error");
+          };
+          reader.readAsText(file);
+          e.target.value = "";
+        });
+      }
 
       let otpSent = false, otpRequired = false;
       const elUser = $("rec-username"), elOtpGroup = $("rec-otp-group"), elOtp = $("rec-otp"),
