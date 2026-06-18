@@ -214,6 +214,53 @@ jobs:
           name: sentrykey-play-release-aab
           path: companion/app/build/outputs/bundle/playRelease/app-play-release.aab
 
+  publish-play:
+    name: Publish AAB to Play (closed testing)
+    needs: [build-android-play]
+    runs-on: ubuntu-latest
+    # Auto-publish to the closed testing track, only on version tags (vX.Y.Z).
+    # Inert until the PLAY_SERVICE_ACCOUNT_JSON secret exists: the upload step
+    # skips with a notice instead of failing, so a release is never blocked on it.
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Check for Play service-account secret
+        id: creds
+        env:
+          SA_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$SA_JSON" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON not set — skipping Play upload. Add the secret to enable auto-publish to the closed track."
+          fi
+
+      - name: Checkout repository
+        if: steps.creds.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Download AAB artifact
+        if: steps.creds.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sentrykey-play-release-aab
+          path: play-aab/
+
+      - name: Upload to Google Play (closed testing)
+        if: steps.creds.outputs.ready == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.fennell.sentrykey
+          releaseFiles: play-aab/app-play-release.aab
+          # Default Closed-testing track resolves to "alpha". If YOUR closed track
+          # has a custom name, set a repo variable PLAY_TRACK to that exact name
+          # (Settings > Secrets and variables > Actions > Variables) — no YAML edit.
+          tracks: ${{ vars.PLAY_TRACK || 'alpha' }}
+          status: completed
+          whatsNewDirectory: distribution/whatsnew
+
   create-release:
     name: Publish GitHub Release
     needs: [build-garmin, build-android]

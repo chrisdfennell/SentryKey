@@ -74,14 +74,25 @@ SentryKey is an independent project and is not affiliated with or endorsed by Ga
       increasing code per upload), `versionName` from the `vX.Y.Z` tag.
 - [x] Privacy policy hosted (URL above).
 
+### Status: live in closed testing
+- [x] **Google Play Developer account** created.
+- [x] **First upload** done — **Play App Signing** accepted; the app is live on the
+      **Closed testing** track (`com.fennell.sentrykey`).
+- [x] **Auto-publish from CI** — the `publish-play` job in [build.yml](.github/workflows/build.yml)
+      uploads the signed AAB to the closed track on every `vX.Y.Z` tag. Requires the
+      `PLAY_SERVICE_ACCOUNT_JSON` repo **secret** (a Play service-account JSON key with
+      "Release apps to testing tracks"). Release notes come from
+      [`distribution/whatsnew/whatsnew-en-US`](distribution/whatsnew/whatsnew-en-US).
+      The track defaults to `alpha`; set a `PLAY_TRACK` repo **variable** to override if
+      your closed track has a custom name.
+
 ### Still to do
-- [ ] **Google Play Developer account** ($25 one-time).
-- [ ] First upload: download the `sentrykey-play-release-aab` artifact and upload to an
-      **Internal testing** track; accept **Play App Signing**.
 - [ ] Replace placeholder launcher icons with final brand icons.
-- [ ] Play Console: **Data safety** form (declare "no data collected/shared"), content
-      rating questionnaire, privacy policy URL, store listing + screenshots, target audience.
+- [ ] Confirm **Data safety**, content rating, and target audience are complete before
+      promoting to production.
 - [ ] Confirm target SDK meets Play's current minimum.
+- [ ] Note: store listing copy below still says "fenix 8 / tactix family" — update to
+      "100+ round Garmin watches" when refreshing the listing.
 
 ---
 
