@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload Garmin Artifacts
         if: steps.key.outputs.has_key == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sentrykey-garmin-build
           path: bin/
@@ -176,7 +176,7 @@ jobs:
           mv companion/app/build/outputs/apk/github/debug/app-github-debug.apk companion/app/build/outputs/apk/github/debug/com.fennell.sentrykey.apk
 
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sentrykey-companion-apk
           path: companion/app/build/outputs/apk/github/debug/com.fennell.sentrykey.apk
@@ -270,7 +270,7 @@ jobs:
           ./gradlew bundlePlayRelease
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sentrykey-play-release-aab
           path: companion/app/build/outputs/bundle/playRelease/app-play-release.aab
