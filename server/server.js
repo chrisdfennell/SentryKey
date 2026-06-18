@@ -6,23 +6,31 @@ const path = require('path');
 const crypto = require('crypto');
 const { rateLimit } = require('express-rate-limit');
 const notify = require('./notify');
+const { createStore, migrateLegacyJson } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SERVER_ACCESS_PASSPHRASE = process.env.SERVER_ACCESS_PASSPHRASE;
 const MAX_BACKUPS_RETAINED = parseInt(process.env.MAX_BACKUPS_RETAINED || '15', 10);
 
-const BACKUPS_DIR = path.join(__dirname, 'backups');
-const DB_DIR = path.join(__dirname, 'db');
-const DB_FILE = path.join(DB_DIR, 'users.json');
+const BACKUPS_DIR = process.env.BACKUPS_DIR || path.join(__dirname, 'backups');
+const DB_DIR = process.env.DB_DIR || path.join(__dirname, 'db');
+const LEGACY_DB_FILE = path.join(DB_DIR, 'users.json');
 
 // Ensure directories exist
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
-// Ensure DB file exists
-if (!fs.existsSync(DB_FILE)) {
-  fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, sessions: {} }, null, 2), 'utf8');
+// SQLite-backed store for accounts + sessions (atomic, crash-safe). Replaces the
+// old single users.json file.
+const store = createStore(DB_DIR);
+
+// One-time import of a pre-existing users.json into SQLite (archives it after).
+const migration = migrateLegacyJson(store, LEGACY_DB_FILE);
+if (migration.migrated) {
+  console.log(`Imported legacy users.json into SQLite: ${migration.users} user(s), ${migration.sessions} session(s).`);
+} else if (migration.error) {
+  console.error('Legacy users.json import error:', migration.error);
 }
 
 app.use(cors());
@@ -46,25 +54,9 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
-// --- Database Helper Functions ---
-
-function loadDb() {
-  try {
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error("Error loading DB, resetting:", err);
-    return { users: {}, sessions: {} };
-  }
-}
-
-function saveDb(db) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
-  } catch (err) {
-    console.error("Error saving DB:", err);
-  }
-}
+// --- Data store ---
+// Accounts + sessions live in SQLite via ./db (the `store` created above).
+// Encrypted vault backups remain individual files under BACKUPS_DIR.
 
 // Prune old backups, retaining only the latest N for a specific user
 const pruneOldBackups = (username) => {
@@ -101,8 +93,7 @@ const authenticateSession = (req, res, next) => {
     return res.status(401).json({ error: 'Unauthorized: Session token missing.' });
   }
 
-  const db = loadDb();
-  const session = db.sessions[token];
+  const session = store.getSession(token);
 
   if (!session) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or expired session.' });
@@ -111,8 +102,7 @@ const authenticateSession = (req, res, next) => {
   // Optional: Expire session after 30 days
   const thirtyDays = 30 * 24 * 60 * 60 * 1000;
   if (Date.now() - session.createdAt > thirtyDays) {
-    delete db.sessions[token];
-    saveDb(db);
+    store.deleteSession(token);
     return res.status(401).json({ error: 'Unauthorized: Session expired.' });
   }
 
@@ -140,8 +130,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     return res.status(403).json({ error: 'Invalid invitation / server access passphrase.' });
   }
 
-  const db = loadDb();
-  if (db.users[cleanUsername]) {
+  if (store.getUser(cleanUsername)) {
     return res.status(409).json({ error: 'Username is already taken.' });
   }
 
@@ -150,12 +139,11 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(authKey, salt, 64).toString('hex');
 
-    db.users[cleanUsername] = {
+    store.putUser(cleanUsername, {
       salt,
       hash,
       createdAt: Date.now()
-    };
-    saveDb(db);
+    });
 
     // Create user's isolated backup directory
     const userDir = path.join(BACKUPS_DIR, cleanUsername);
@@ -180,8 +168,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   }
 
   const cleanUsername = username.trim().toLowerCase();
-  const db = loadDb();
-  const user = db.users[cleanUsername];
+  const user = store.getUser(cleanUsername);
 
   if (!user) {
     return res.status(401).json({ error: 'Invalid username or password.' });
@@ -196,11 +183,10 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
 
     // Generate random 32-byte session token
     const token = crypto.randomBytes(32).toString('hex');
-    db.sessions[token] = {
+    store.putSession(token, {
       username: cleanUsername,
       createdAt: Date.now()
-    };
-    saveDb(db);
+    });
 
     console.log(`User logged in: ${cleanUsername}`);
     res.json({ message: 'Login successful.', token, username: cleanUsername });
@@ -214,12 +200,10 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   const token = req.headers['x-session-token'];
   if (token) {
-    const db = loadDb();
-    if (db.sessions[token]) {
-      const username = db.sessions[token].username;
-      delete db.sessions[token];
-      saveDb(db);
-      console.log(`User logged out: ${username}`);
+    const session = store.getSession(token);
+    if (session) {
+      store.deleteSession(token);
+      console.log(`User logged out: ${session.username}`);
     }
   }
   res.json({ message: 'Logged out successfully.' });
@@ -288,8 +272,7 @@ app.post('/api/recovery/setup', authLimiter, authenticateSession, (req, res) => 
   if (!salt || !blob || !authKey) {
     return res.status(400).json({ error: 'salt, blob and authKey are required.' });
   }
-  const db = loadDb();
-  const user = db.users[req.username];
+  const user = store.getUser(req.username);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
   const authSalt = crypto.randomBytes(16).toString('hex');
@@ -302,15 +285,14 @@ app.post('/api/recovery/setup', authLimiter, authenticateSession, (req, res) => 
   if (email !== undefined) user.email = String(email).trim() || undefined;
   if (phone !== undefined) user.phone = String(phone).trim() || undefined;
   delete user.recoveryOtp;
-  saveDb(db);
+  store.putUser(req.username, user);
   res.json({ message: 'Recovery enabled.', channels: recoveryChannels(user) });
 });
 
 // Begin recovery: if an OTP channel is configured, send a code; else proceed.
 app.post('/api/recovery/start', authLimiter, async (req, res) => {
   const cleanUsername = String(req.body.username || '').trim().toLowerCase();
-  const db = loadDb();
-  const user = db.users[cleanUsername];
+  const user = store.getUser(cleanUsername);
   if (!user || !user.recovery) {
     return res.status(404).json({ error: 'No recovery is set up for this account.' });
   }
@@ -320,7 +302,7 @@ app.post('/api/recovery/start', authLimiter, async (req, res) => {
   }
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   user.recoveryOtp = { hash: sha256(otp), exp: Date.now() + 5 * 60 * 1000, attempts: 0 };
-  saveDb(db);
+  store.putUser(cleanUsername, user);
   const sentTo = [];
   try {
     if (channels.includes('email')) { await notify.sendEmail(user.email, 'SentryKey recovery code', `Your SentryKey recovery code is ${otp}. It expires in 5 minutes.`); sentTo.push(maskEmail(user.email)); }
@@ -343,12 +325,12 @@ function otpOk(user, otp) {
 // Return the wrapped recovery material (+ latest vault) for the client to unwrap.
 app.post('/api/recovery/fetch', authLimiter, (req, res) => {
   const cleanUsername = String(req.body.username || '').trim().toLowerCase();
-  const db = loadDb();
-  const user = db.users[cleanUsername];
+  const user = store.getUser(cleanUsername);
   if (!user || !user.recovery) return res.status(404).json({ error: 'No recovery on file.' });
   if (recoveryChannels(user).length > 0) {
-    if (!otpOk(user, req.body.otp)) { saveDb(db); return res.status(401).json({ error: 'Invalid or expired code.' }); }
-    saveDb(db);
+    const ok = otpOk(user, req.body.otp);
+    store.putUser(cleanUsername, user); // persist the attempts counter
+    if (!ok) return res.status(401).json({ error: 'Invalid or expired code.' });
   }
   res.json({ salt: user.recovery.salt, blob: user.recovery.blob, vault: latestBackupContent(cleanUsername) });
 });
@@ -358,14 +340,13 @@ app.post('/api/recovery/fetch', authLimiter, (req, res) => {
 app.post('/api/recovery/reset', authLimiter, (req, res) => {
   const cleanUsername = String(req.body.username || '').trim().toLowerCase();
   const { recoveryAuthKey, otp, newAuthKey, newRecovery, vault } = req.body;
-  const db = loadDb();
-  const user = db.users[cleanUsername];
+  const user = store.getUser(cleanUsername);
   if (!user || !user.recovery) return res.status(404).json({ error: 'No recovery on file.' });
   if (!recoveryAuthKey || !newAuthKey || !newRecovery || !newRecovery.salt || !newRecovery.blob || !newRecovery.authKey) {
     return res.status(400).json({ error: 'Missing recovery reset fields.' });
   }
   if (recoveryChannels(user).length > 0 && !otpOk(user, otp)) {
-    saveDb(db);
+    store.putUser(cleanUsername, user);
     return res.status(401).json({ error: 'Invalid or expired code.' });
   }
   // Verify the user actually holds the recovery key.
@@ -399,10 +380,10 @@ app.post('/api/recovery/reset', authLimiter, (req, res) => {
     } catch (_) { /* ignore a malformed vault */ }
   }
 
-  // Issue a fresh session.
+  // Persist the rotated credentials + issue a fresh session.
   const token = crypto.randomBytes(32).toString('hex');
-  db.sessions[token] = { username: cleanUsername, createdAt: Date.now() };
-  saveDb(db);
+  store.putUser(cleanUsername, user);
+  store.putSession(token, { username: cleanUsername, createdAt: Date.now() });
   console.log(`Recovery reset for: ${cleanUsername}`);
   res.json({ message: 'Recovery successful.', token, username: cleanUsername });
 });
@@ -535,7 +516,7 @@ app.listen(PORT, () => {
   console.log(`===================================================`);
   console.log(` SentryKey Zero-Knowledge VPS Server is running     `);
   console.log(` Port: ${PORT}                                      `);
-  console.log(` DB location: ${DB_FILE}                            `);
+  console.log(` DB location: ${store.dbPath}                       `);
   console.log(` Backups folder: ${BACKUPS_DIR}                     `);
   console.log(` Invite code required for register: ${!!SERVER_ACCESS_PASSPHRASE}`);
   console.log(`===================================================`);
