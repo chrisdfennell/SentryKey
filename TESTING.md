@@ -10,11 +10,13 @@ watch, the phone, Wear OS, and the server/web).
 | **Android app** | RFC 6238 TOTP, Base32, vault parser (pure JVM); **cloud / sync / backup / recovery crypto via Robolectric** with pinned cross-platform vectors | `cd companion && ./gradlew :app:testGithubDebugUnitTest` |
 | **Wear OS app** | RFC 6238 TOTP, Base32, vault parser (pure JVM) | `cd companion && ./gradlew :wear:testDebugUnitTest` |
 | **Garmin watch** | Pure Monkey C **SHA-1**, **HMAC-SHA1** (RFC 2202), **Base32**, **RFC 6238 TOTP** | `./build.ps1 -Test` (builds + runs in the Connect IQ simulator) |
+| **Web dashboard** | Full zero-knowledge flow (register → add → encrypted auto-save → reload decrypts) + ciphertext-only upload | `cd server && npm run e2e` (Playwright) |
 
 ## In CI
-`.github/workflows/build.yml` runs the **server** and **Android + Wear** suites on
-every push/PR and **gates the Android build and Play release** on them (a failing
-unit test blocks the build). The Garmin **unit-test build is compiled** in CI to
+`.github/workflows/build.yml` runs the **server**, **Android + Wear**, and **web
+E2E** (Playwright) suites on every push/PR and **gates the Android build and Play
+release** on the unit suites (a failing unit test blocks the build). The Garmin
+**unit-test build is compiled** in CI to
 catch test rot; the tests themselves are executed locally (`./build.ps1 -Test`)
 because the Connect IQ simulator isn't headless-friendly.
 
@@ -25,5 +27,3 @@ because the Connect IQ simulator isn't headless-friendly.
   Everything else — cloud, sync, backup, recovery — now runs headlessly in CI
   (`CloudCryptoRobolectricTest`).
 - **iOS** — blocked on creating the Xcode project; then XCTest on a macOS runner.
-- **Web dashboard UI** — `crypto.js` is exercised by the server suite; no Playwright
-  end-to-end test yet.

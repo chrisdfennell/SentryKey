@@ -28,3 +28,7 @@ developer_key.der.base64
 .DS_Store
 Thumbs.db
 .claude/settings.json
+
+# Playwright E2E artifacts
+server/test-results/
+server/playwright-report/

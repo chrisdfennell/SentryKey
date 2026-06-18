@@ -47,6 +47,23 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:testGithubDebugUnitTest :wear:testDebugUnitTest
 
+  test-web-e2e:
+    name: Test Web (Playwright E2E)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install server deps
+        run: cd server && npm ci
+      - name: Install Playwright Chromium
+        run: cd server && npx playwright install --with-deps chromium
+      - name: Run web dashboard E2E
+        run: cd server && npm run e2e
+
   build-garmin:
     name: Build Garmin Watch App
     runs-on: ubuntu-latest

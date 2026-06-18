@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test_crypto.js && node test_server.js"
+    "test": "node test_crypto.js && node test_server.js",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -16,5 +17,8 @@
     "nodemailer": "^6.9.14"
   },
   "author": "Christopher Fennell",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0"
+  }
 }
