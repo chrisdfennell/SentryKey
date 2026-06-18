@@ -54,6 +54,50 @@ enum CloudBackupClient {
         try await requestRaw(baseURL, "/api/backups/file/\(filename)", method: "GET", token: token)
     }
 
+    // MARK: - Account recovery
+
+    struct RecoveryStart { let otpRequired: Bool; let sentTo: [String] }
+    struct RecoveryMaterial { let salt: String; let blob: String; let vault: String? }
+
+    static func setupRecovery(baseURL: String, token: String, salt: String, blob: String,
+                              authKey: String, email: String, phone: String) async throws {
+        _ = try await request(baseURL, "/api/recovery/setup", method: "POST", token: token,
+                              body: ["salt": salt, "blob": blob, "authKey": authKey, "email": email, "phone": phone])
+    }
+
+    static func recoveryStart(baseURL: String, username: String) async throws -> RecoveryStart {
+        let j = try await request(baseURL, "/api/recovery/start", method: "POST", body: ["username": username])
+        return RecoveryStart(otpRequired: (j["otpRequired"] as? Bool) ?? false, sentTo: (j["sentTo"] as? [String]) ?? [])
+    }
+
+    static func recoveryFetch(baseURL: String, username: String, otp: String?) async throws -> RecoveryMaterial {
+        var body: [String: Any] = ["username": username]
+        if let otp = otp, !otp.isEmpty { body["otp"] = otp }
+        let j = try await request(baseURL, "/api/recovery/fetch", method: "POST", body: body)
+        guard let salt = j["salt"] as? String, let blob = j["blob"] as? String else {
+            throw CloudError(message: "Verification failed.")
+        }
+        return RecoveryMaterial(salt: salt, blob: blob, vault: j["vault"] as? String)
+    }
+
+    static func recoveryReset(baseURL: String, username: String, recoveryAuthKey: String, otp: String?,
+                              newAuthKey: String, newRecovery: (salt: String, blob: String, authKey: String),
+                              vault: String) async throws -> String {
+        var body: [String: Any] = [
+            "username": username,
+            "recoveryAuthKey": recoveryAuthKey,
+            "newAuthKey": newAuthKey,
+            "newRecovery": ["salt": newRecovery.salt, "blob": newRecovery.blob, "authKey": newRecovery.authKey],
+            "vault": vault
+        ]
+        if let otp = otp, !otp.isEmpty { body["otp"] = otp }
+        let j = try await request(baseURL, "/api/recovery/reset", method: "POST", body: body)
+        guard let token = j["token"] as? String, !token.isEmpty else {
+            throw CloudError(message: "Recovery did not return a session token.")
+        }
+        return token
+    }
+
     // MARK: - HTTP
 
     private static func normalize(_ baseURL: String) -> String {

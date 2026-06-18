@@ -30,6 +30,66 @@ enum CloudCrypto {
         return UserKeys(authKey: authHex, encKey: Data(encMac))
     }
 
+    // MARK: - Account recovery (matches web crypto.js / Android CloudCrypto.kt)
+
+    struct RecoveryKeys {
+        let wrapKey: Data
+        let authKey: String
+    }
+
+    /// A readable one-time recovery key, e.g. ABCDE-FGHJK-LMNPQ-RSTUV (~100 bits).
+    static func generateRecoveryKey() -> String {
+        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") // no ambiguous 0/O/1/I
+        var bytes = Data(count: 20)
+        _ = bytes.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 20, $0.baseAddress!) }
+        var out = ""
+        for (i, b) in bytes.enumerated() {
+            out.append(alphabet[Int(b) % alphabet.count])
+            if (i + 1) % 5 == 0 && i < bytes.count - 1 { out.append("-") }
+        }
+        return out
+    }
+
+    static func randomSalt() -> Data {
+        var s = Data(count: 16)
+        _ = s.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        return s
+    }
+
+    /// wrapKey (stays on device) + authKey (proves possession to the server).
+    static func deriveRecovery(recoveryKey: String, salt: Data) -> RecoveryKeys {
+        let norm = recoveryKey
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .uppercased()
+        let master = pbkdf2SHA256(password: norm, salt: salt, iterations: iterations, keyLen: 32)
+        let key = SymmetricKey(data: master)
+        let wrap = HMAC<SHA256>.authenticationCode(for: Data("recovery-wrap".utf8), using: key)
+        let auth = HMAC<SHA256>.authenticationCode(for: Data("recovery-auth".utf8), using: key)
+        let authHex = Data(auth).map { String(format: "%02x", $0) }.joined()
+        return RecoveryKeys(wrapKey: Data(wrap), authKey: authHex)
+    }
+
+    /// AES-GCM wrap → base64(iv(12) || ciphertext || tag).
+    static func wrapBytes(_ plain: Data, wrapKey: Data) -> String {
+        var iv = Data(count: 12)
+        _ = iv.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 12, $0.baseAddress!) }
+        let sealed = try! AES.GCM.seal(plain, using: SymmetricKey(data: wrapKey), nonce: try! AES.GCM.Nonce(data: iv))
+        return (iv + sealed.ciphertext + sealed.tag).base64EncodedString()
+    }
+
+    /// Reverses wrapBytes; nil if the wrap key is wrong.
+    static func unwrapBytes(_ blobB64: String, wrapKey: Data) -> Data? {
+        guard let combined = Data(base64Encoded: blobB64), combined.count > 12 + 16 else { return nil }
+        let iv = combined.prefix(12)
+        let body = combined.dropFirst(12)
+        let ct = body.prefix(body.count - 16)
+        let tag = body.suffix(16)
+        guard let box = try? AES.GCM.SealedBox(nonce: try AES.GCM.Nonce(data: iv), ciphertext: ct, tag: tag),
+              let plain = try? AES.GCM.open(box, using: SymmetricKey(data: wrapKey)) else { return nil }
+        return plain
+    }
+
     static func encryptWithKey(_ plaintext: String, encKey: Data) -> String {
         var salt = Data(count: 16)
         var iv = Data(count: 12)

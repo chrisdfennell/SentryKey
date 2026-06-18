@@ -9,6 +9,9 @@ final class CloudStore: ObservableObject {
 
     @Published private(set) var isSignedIn: Bool = false
 
+    /// Set during account recovery; ContentView merges it into the local vault on appear.
+    var pendingRestoreJSON: String?
+
     private let service = "com.sentrykey.cloud"
     private let urlKey = "cloud_url"
     private let userKey = "cloud_user"

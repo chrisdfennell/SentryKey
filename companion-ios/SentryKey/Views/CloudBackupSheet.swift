@@ -11,6 +11,7 @@ struct CloudBackupSheet: View {
     @State private var backups: [CloudBackupClient.BackupMeta] = []
     @State private var status: String?
     @State private var busy = false
+    @State private var showRecovery = false
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,7 @@ struct CloudBackupSheet: View {
                     Text(store.username.isEmpty ? "Signed in" : store.username)
                         .foregroundStyle(.secondary)
                     Button("Back up now") { backUp() }.disabled(busy)
+                    Button("🛟 Set up account recovery") { showRecovery = true }
                     Button("Sign out", role: .destructive) {
                         store.signOut()
                         dismiss()
@@ -47,6 +49,7 @@ struct CloudBackupSheet: View {
             .navigationTitle("Cloud Backup")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .task { await loadList() }
+            .sheet(isPresented: $showRecovery) { RecoverySetupView() }
         }
     }
 

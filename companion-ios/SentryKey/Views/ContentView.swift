@@ -137,7 +137,17 @@ struct ContentView: View {
             }
         }
         .tint(brandOrange)
-        .onAppear { updates.start() }
+        .onAppear {
+            updates.start()
+            // Merge a vault recovered via the account-recovery flow, if any.
+            if let json = CloudStore.shared.pendingRestoreJSON {
+                CloudStore.shared.pendingRestoreJSON = nil
+                for account in VaultExportImport.parseImport(json)
+                where !vault.accounts.contains(account) {
+                    vault.add(account)
+                }
+            }
+        }
         .onChange(of: sync.lastPulledVault) { pulledString in
             guard let pulledString else { return }
             sync.lastPulledVault = nil

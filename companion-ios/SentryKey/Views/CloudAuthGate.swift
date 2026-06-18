@@ -30,6 +30,7 @@ struct CloudAuthScreen: View {
     @State private var isRegister = false
     @State private var busy = false
     @State private var error: String?
+    @State private var showRecover = false
 
     var body: some View {
         ZStack {
@@ -65,6 +66,11 @@ struct CloudAuthScreen: View {
                     }
                     .font(.footnote).foregroundStyle(brandOrange).disabled(busy)
 
+                    if !isRegister {
+                        Button("Forgot your master password?") { showRecover = true }
+                            .font(.footnote).foregroundStyle(.secondary).disabled(busy)
+                    }
+
                     Button("Use without cloud") {
                         store.offlineChosen = true
                         store.objectWillChange.send()
@@ -76,6 +82,7 @@ struct CloudAuthScreen: View {
                 .padding(.horizontal, 28)
             }
         }
+        .fullScreenCover(isPresented: $showRecover) { AccountRecoveryView() }
     }
 
     private func submit() {
