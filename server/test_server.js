@@ -51,6 +51,11 @@ async function jget(base, p, headers = {}) {
   let body2 = null; try { body2 = await r.json(); } catch (_) {}
   return { status: r.status, body: body2 };
 }
+async function jdel(base, p, headers = {}) {
+  const r = await fetch(`${base}${p}`, { method: 'DELETE', headers });
+  let body2 = null; try { body2 = await r.json(); } catch (_) {}
+  return { status: r.status, body: body2 };
+}
 
 const sampleVault = () => ({ app: 'SentryKey', version: 1, encrypted: true, kdf: 'pbkdf2', iterations: 210000, salt: 'bb', iv: 'aa', ciphertext: 'deadbeef' });
 
@@ -144,6 +149,24 @@ async function phaseAdmin() {
     check('isAdmin true for admin, false for user',
       (await jget(base, '/api/account', adminAuth)).body?.isAdmin === true && acct.body?.isAdmin === false);
     check('unknown plan -> 400', (await jpost(base, '/api/admin/users/normaluser/plan', { plan: 'enterprise' }, adminAuth)).status === 400);
+
+    const srvInfo = await jget(base, '/api/admin/server', adminAuth);
+    check('server info: version + counts', !!srvInfo.body?.version && typeof srvInfo.body?.users === 'number' && typeof srvInfo.body?.sessions === 'number');
+
+    check('suspend user', (await jpost(base, '/api/admin/users/normaluser/suspend', { suspended: true }, adminAuth)).status === 200);
+    check('suspended user cannot log in (403)', (await jpost(base, '/api/auth/login', { username: 'normaluser', authKey: userK })).status === 403);
+    check('unsuspend restores login',
+      (await jpost(base, '/api/admin/users/normaluser/suspend', { suspended: false }, adminAuth)).status === 200
+      && (await jpost(base, '/api/auth/login', { username: 'normaluser', authKey: userK })).status === 200);
+
+    const freshTok = (await jpost(base, '/api/auth/login', { username: 'normaluser', authKey: userK })).body?.token;
+    await jpost(base, '/api/admin/users/normaluser/revoke-sessions', {}, adminAuth);
+    check('revoked session token is rejected (401)', (await jget(base, '/api/account', { 'x-session-token': freshTok })).status === 401);
+
+    await jpost(base, '/api/auth/register', { username: 'tempuser', authKey: 'temp-k', inviteCode: INVITE });
+    check('admin deletes account', (await jdel(base, '/api/admin/users/tempuser', adminAuth)).status === 200);
+    check('deleted user cannot log in (401)', (await jpost(base, '/api/auth/login', { username: 'tempuser', authKey: 'temp-k' })).status === 401);
+    check('admin cannot delete self (400)', (await jdel(base, '/api/admin/users/adminuser', adminAuth)).status === 400);
   } finally {
     srv.kill();
   }

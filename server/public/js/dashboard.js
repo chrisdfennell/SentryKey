@@ -72,6 +72,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // Kick off: list backups + auto-load the newest.
   initVault();
 
+  // Reveal the Admin nav item in the sidebar if this account is a server admin.
+  (async () => {
+    try {
+      const res = await fetch("/api/account", { headers: { "X-Session-Token": sessionToken } });
+      if (!res.ok) return;
+      if ((await res.json()).isAdmin) {
+        const el = $("nav-admin");
+        if (el) el.style.display = "";
+      }
+    } catch (_) { /* non-fatal */ }
+  })();
+
   // ==========================================================================
   // STATUS / TOAST
   // ==========================================================================
@@ -519,8 +531,6 @@ document.addEventListener("DOMContentLoaded", () => {
         $("account-since").textContent = a.createdAt ? new Date(a.createdAt).toLocaleDateString() : "—";
         $("account-backups").textContent = `${a.backups?.count ?? 0}${a.backups?.max ? " / " + a.backups.max : ""}`;
         $("account-storage").textContent = fmtBytes(a.backups?.bytes ?? 0);
-        const adminLink = $("account-admin-link");
-        if (adminLink) adminLink.style.display = a.isAdmin ? "inline-flex" : "none";
       } catch (_) {
         $("account-plan-badge").textContent = "Free";
       }

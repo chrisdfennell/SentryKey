@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { rateLimit } = require('express-rate-limit');
 const notify = require('./notify');
 const { createStore, migrateLegacyJson } = require('./db');
+const SERVER_VERSION = (() => { try { return require('./package.json').version; } catch (_) { return 'unknown'; } })();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -203,6 +204,9 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
     if (hash !== user.hash) {
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
+    if (user.suspended) {
+      return res.status(403).json({ error: 'This account has been suspended. Contact the administrator.' });
+    }
 
     // Generate random 32-byte session token
     const token = crypto.randomBytes(32).toString('hex');
@@ -266,6 +270,7 @@ app.get('/api/admin/users', apiLimiter, authenticateSession, requireAdmin, (req,
   const users = store.allUsers().map((u) => ({
     username: u.username,
     plan: u.plan || 'free',
+    suspended: !!u.suspended,
     createdAt: u.createdAt || null,
     hasRecovery: !!u.recovery,
     backups: backupUsage(u.username),
@@ -299,6 +304,54 @@ app.post('/api/admin/users/:username/plan', apiLimiter, authenticateSession, req
   store.putUser(target, user);
   console.log(`Admin ${req.username} set ${target} -> ${plan}`);
   res.json({ username: target, plan });
+});
+
+// Server info / health for operators.
+app.get('/api/admin/server', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  res.json({
+    version: SERVER_VERSION,
+    node: process.version,
+    uptimeSeconds: Math.floor(process.uptime()),
+    registrationRestricted: !!SERVER_ACCESS_PASSPHRASE,
+    plans: PLANS,
+    users: store.countUsers(),
+    sessions: store.countSessions(),
+    admins: ADMIN_USERS,
+  });
+});
+
+// Suspend / unsuspend an account (blocks login; data is kept).
+app.post('/api/admin/users/:username/suspend', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const target = String(req.params.username || '').trim().toLowerCase();
+  const suspended = !!req.body.suspended;
+  const user = store.getUser(target);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  user.suspended = suspended;
+  store.putUser(target, user);
+  if (suspended) store.deleteSessionsForUser(target); // kick active sessions
+  console.log(`Admin ${req.username} ${suspended ? 'suspended' : 'unsuspended'} ${target}`);
+  res.json({ username: target, suspended });
+});
+
+// Force-logout: revoke all of a user's sessions.
+app.post('/api/admin/users/:username/revoke-sessions', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const target = String(req.params.username || '').trim().toLowerCase();
+  if (!store.getUser(target)) return res.status(404).json({ error: 'User not found.' });
+  store.deleteSessionsForUser(target);
+  console.log(`Admin ${req.username} revoked sessions for ${target}`);
+  res.json({ username: target, ok: true });
+});
+
+// Delete an account: record + sessions + stored backups. Irreversible.
+app.delete('/api/admin/users/:username', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const target = String(req.params.username || '').trim().toLowerCase();
+  if (target === req.username) return res.status(400).json({ error: "You can't delete your own admin account from here." });
+  if (!store.getUser(target)) return res.status(404).json({ error: 'User not found.' });
+  store.deleteSessionsForUser(target);
+  store.deleteUser(target);
+  deleteBackupsForUser(target);
+  console.log(`Admin ${req.username} DELETED account ${target}`);
+  res.json({ username: target, deleted: true });
 });
 
 // --- Zero-Knowledge Account Recovery ---
@@ -335,6 +388,14 @@ function backupUsage(username) {
     }
   } catch (_) { /* best effort */ }
   return { count, bytes };
+}
+
+// Remove all of a user's stored backups (used by admin account deletion).
+function deleteBackupsForUser(username) {
+  try {
+    const dir = path.join(BACKUPS_DIR, username);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  } catch (_) { /* best effort */ }
 }
 
 // Newest stored backup ciphertext for a user, or null.

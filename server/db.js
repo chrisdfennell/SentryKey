@@ -54,6 +54,8 @@ function createStore(dbDir) {
     putSession:  db.prepare(`INSERT INTO sessions (token, username, created_at) VALUES (?, ?, ?)
                              ON CONFLICT(token) DO UPDATE SET username = excluded.username, created_at = excluded.created_at`),
     delSession:  db.prepare('DELETE FROM sessions WHERE token = ?'),
+    delUserSessions: db.prepare('DELETE FROM sessions WHERE username = ?'),
+    countSessions:   db.prepare('SELECT COUNT(*) AS n FROM sessions'),
   };
 
   return {
@@ -90,6 +92,13 @@ function createStore(dbDir) {
     },
     deleteSession(token) {
       q.delSession.run(token);
+    },
+    /** Revoke every session for a user (admin force-logout). */
+    deleteSessionsForUser(username) {
+      q.delUserSessions.run(username);
+    },
+    countSessions() {
+      return q.countSessions.get().n;
     },
   };
 }
