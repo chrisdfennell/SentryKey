@@ -1,10 +1,8 @@
-New in SentryKey:
+What's new in this update:
 
-- Home-screen widget for your codes at a glance
-- Automatic encrypted cloud backup + instant watch sync
-- Stay signed in with biometric unlock (fingerprint/face)
-- Zero-knowledge account recovery: save a recovery key and reset your master password without losing your vault
-- New Wear OS app
-- Garmin support expanded to 100+ round watches
+- More reliable multi-device sync: editing your vault on two devices at once (e.g. your phone and the web) now merges safely instead of overwriting — a 2FA code is never lost.
+- Under-the-hood stability and testing improvements.
 
-Thanks for testing! Send feedback anytime.
+Still here from recent updates: home-screen widget, automatic encrypted cloud backup, biometric unlock, zero-knowledge account recovery, Wear OS app, and 100+ round Garmin watches.
+
+Thanks for testing!
