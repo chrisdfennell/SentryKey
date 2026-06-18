@@ -46,6 +46,9 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -58,4 +61,5 @@ dependencies {
     implementation("androidx.wear.compose:compose-material:1.4.1")
     implementation("androidx.wear.compose:compose-foundation:1.4.1")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    testImplementation(libs.junit)
 }
