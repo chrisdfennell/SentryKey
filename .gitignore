@@ -32,3 +32,4 @@ Thumbs.db
 # Playwright E2E artifacts
 server/test-results/
 server/playwright-report/
+dist/v1.2.0/app-play-release.aab
