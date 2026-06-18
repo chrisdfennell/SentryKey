@@ -17,6 +17,17 @@ services:
       MAX_BACKUPS_RETAINED: "15"
       # From .env (see .env.example). If set, registration requires it as an invite code.
       SERVER_ACCESS_PASSPHRASE: "${SERVER_ACCESS_PASSPHRASE:-}"
+      # Comma-separated admin usernames that unlock /admin.html. Empty = no admins.
+      ADMIN_USERS: "${ADMIN_USERS:-}"
+      # Optional recovery email/SMS (see .env.example). Empty = disabled.
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+      TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN:-}"
+      TWILIO_FROM_NUMBER: "${TWILIO_FROM_NUMBER:-}"
     volumes:
       - sentrykey-db:/usr/src/app/db
       - sentrykey-backups:/usr/src/app/backups
