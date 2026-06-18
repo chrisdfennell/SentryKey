@@ -195,7 +195,7 @@ a:hover {
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0; /* no gap between "Sentry" and "Key" — they read as one word */
   font-family: 'Outfit', sans-serif;
   font-size: 24px;
   font-weight: 900;
@@ -209,6 +209,7 @@ a:hover {
 .logo svg {
   width: 36px;
   height: 36px;
+  margin-right: 12px; /* spacing between the icon and the wordmark */
 }
 
 /* Hero Section */
