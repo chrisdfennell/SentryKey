@@ -166,6 +166,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
       salt,
       hash,
       plan: 'free',
+      vaultRev: 0,
       createdAt: Date.now()
     });
 
@@ -579,7 +580,7 @@ app.get('/api/backups', apiLimiter, authenticateSession, (req, res) => {
       })
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-    res.json({ backups: files });
+    res.json({ backups: files, rev: (store.getUser(req.username) || {}).vaultRev || 0 });
   } catch (err) {
     console.error(`Error listing backups for ${req.username}:`, err);
     res.status(500).json({ error: 'Failed to list backups.' });
@@ -621,6 +622,18 @@ app.post('/api/backups/upload', apiLimiter, authenticateSession, (req, res) => {
     return res.status(400).json({ error: 'Invalid backup structure: must be an encrypted SentryKey vault' });
   }
 
+  // Optimistic concurrency: if the client declares the revision it started from
+  // (X-Base-Rev) and another device uploaded since, reject with 409 so the client
+  // can merge instead of silently clobbering. Clients that omit the header keep
+  // the legacy always-accept behavior.
+  const user = store.getUser(req.username);
+  if (!user) return res.status(404).json({ error: 'Account not found.' });
+  const currentRev = user.vaultRev || 0;
+  const baseRev = req.headers['x-base-rev'];
+  if (baseRev !== undefined && Number(baseRev) !== currentRev) {
+    return res.status(409).json({ error: 'Vault was updated on another device.', currentRev });
+  }
+
   const userDir = path.join(BACKUPS_DIR, req.username);
   if (!fs.existsSync(userDir)) {
     fs.mkdirSync(userDir, { recursive: true });
@@ -636,11 +649,14 @@ app.post('/api/backups/upload', apiLimiter, authenticateSession, (req, res) => {
     const filePath = path.join(userDir, filename);
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
 
-    console.log(`Saved new backup for [${req.username}]: ${filename}`);
+    user.vaultRev = currentRev + 1;
+    store.putUser(req.username, user);
+
+    console.log(`Saved new backup for [${req.username}]: ${filename} (rev ${user.vaultRev})`);
 
     pruneOldBackups(req.username);
 
-    res.status(201).json({ message: 'Backup stored successfully.', filename });
+    res.status(201).json({ message: 'Backup stored successfully.', filename, rev: user.vaultRev });
   } catch (err) {
     console.error(`Error saving backup for ${req.username}:`, err);
     res.status(500).json({ error: 'Failed to save backup file.' });

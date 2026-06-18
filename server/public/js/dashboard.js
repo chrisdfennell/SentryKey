@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastSavedJson = null;          // skip no-op uploads
   let autoSaveTimer = null;
   let pendingUndo = null;            // { account, index, timer }
+  let currentRev = 0;                // server vault revision we last synced from
 
   if (!sessionToken || !username || !encKeyB64) {
     localStorage.removeItem("sentrykey_session_token");
@@ -135,6 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!res.ok) throw new Error("list failed");
       const data = await res.json();
       const backups = data.backups || [];
+      currentRev = data.rev || 0;
       elBackupDropdown.innerHTML = "";
       if (backups.length === 0) {
         elBackupDropdown.innerHTML = '<option value="">-- No backups on server yet --</option>';
@@ -241,7 +243,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   function vaultJson() { return JSON.stringify({ app: "SentryKey", version: 1, accounts }); }
 
-  async function saveToCloud(silent) {
+  async function saveToCloud(silent, depth) {
+    depth = depth || 0;
     const json = vaultJson();
     if (json === lastSavedJson) { setSaveStatus("Saved", "ok"); return; }
     try {
@@ -249,13 +252,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const envelope = await SentryCrypto.encryptWithKey(json, encKeyBytes);
       const res = await fetch("/api/backups/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": sessionToken },
+        headers: { "Content-Type": "application/json", "X-Session-Token": sessionToken, "X-Base-Rev": String(currentRev) },
         body: envelope
       });
+      if (res.status === 409) {
+        // Another device uploaded since we loaded — merge its changes and retry.
+        if (depth >= 2) { setSaveStatus("Sync conflict", "error"); showToast("Sync conflict — reload to get the latest.", "error"); return; }
+        await reconcileAndRetry(silent, depth + 1);
+        return;
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "upload failed");
       }
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.rev === "number") currentRev = data.rev;
       lastSavedJson = json;
       setSaveStatus("Saved ✓", "ok");
       if (!silent) showToast("Synced to cloud.", "success");
@@ -264,6 +275,38 @@ document.addEventListener("DOMContentLoaded", () => {
       setSaveStatus("Save failed", "error");
       if (!silent) showToast(e.message || "Sync failed.", "error");
     }
+  }
+
+  // On a 409, pull the latest vault, union-merge it with ours (so no account is
+  // ever lost), then retry the save against the fresh revision.
+  async function reconcileAndRetry(silent, depth) {
+    setSaveStatus("Merging…", "saving");
+    try {
+      const backups = await fetchBackupList(); // refreshes currentRev
+      if (backups.length) {
+        const res = await fetch(`/api/backups/file/${backups[0].filename}`, { headers: { "X-Session-Token": sessionToken } });
+        const remotePlain = await SentryCrypto.decryptWithKey(await res.text(), encKeyBytes);
+        const remoteAccounts = (JSON.parse(remotePlain).accounts) || [];
+        accounts = mergeAccounts(accounts, remoteAccounts);
+        renderAccountsGrid();
+      }
+      lastSavedJson = null; // force the retry to upload the merged vault
+      if (!silent) showToast("Merged changes from another device.", "info");
+      await saveToCloud(silent, depth);
+    } catch (e) {
+      setSaveStatus("Sync conflict", "error");
+      showToast("Couldn't merge — reload to see the latest.", "error");
+    }
+  }
+
+  // Union of two account lists by (label, secret) — never drops a 2FA secret.
+  function mergeAccounts(a, b) {
+    const seen = new Set(), out = [];
+    for (const acc of [].concat(a, b)) {
+      const key = (acc.label || "") + " " + (acc.secret || "");
+      if (!seen.has(key)) { seen.add(key); out.push(acc); }
+    }
+    return out;
   }
 
   function scheduleAutoSave() {

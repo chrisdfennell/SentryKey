@@ -172,10 +172,38 @@ async function phaseAdmin() {
   }
 }
 
+async function phaseSync() {
+  console.log('\n--- Phase D: multi-device sync (vault revisions + conflict) ---');
+  const port = 38214, dbDir = mkTmp('skdb4-'), backupsDir = mkTmp('skbk4-'), base = `http://127.0.0.1:${port}`;
+  const srv = startServer({ port, dbDir, backupsDir });
+  try {
+    await waitReady(base);
+    const k = 'sync-authkey';
+    await jpost(base, '/api/auth/register', { username: 'syncuser', authKey: k, inviteCode: INVITE });
+    const auth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'syncuser', authKey: k })).body?.token };
+    const upload = (baseRev) => jpost(base, '/api/backups/upload', sampleVault(),
+      baseRev === undefined ? auth : { ...auth, 'x-base-rev': String(baseRev) });
+
+    check('initial rev is 0', (await jget(base, '/api/backups', auth)).body?.rev === 0);
+    const up1 = await upload(0);
+    check('upload at base rev 0 -> rev 1', up1.status === 201 && up1.body?.rev === 1);
+    const up2 = await upload(0);
+    check('stale base rev -> 409 + currentRev', up2.status === 409 && up2.body?.currentRev === 1);
+    const up3 = await upload(1);
+    check('upload at base rev 1 -> rev 2', up3.status === 201 && up3.body?.rev === 2);
+    const up4 = await upload(undefined); // legacy client, no header -> still accepted
+    check('legacy upload (no base rev) accepted -> rev 3', up4.status === 201 && up4.body?.rev === 3);
+    check('list reflects rev 3', (await jget(base, '/api/backups', auth)).body?.rev === 3);
+  } finally {
+    srv.kill();
+  }
+}
+
 (async () => {
   await phaseFresh();
   await phaseMigration();
   await phaseAdmin();
+  await phaseSync();
   console.log(`\n${failures === 0 ? 'ALL PASS ✅' : failures + ' FAILURE(S) ❌'}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

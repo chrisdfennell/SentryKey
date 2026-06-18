@@ -2,6 +2,36 @@ const { test, expect } = require('@playwright/test');
 
 const INVITE = 'e2e-invite';
 
+async function registerAndOpen(page, username, password) {
+  await page.goto('/login.html');
+  await page.click('#tab-signup');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.locator('#invite-code').waitFor({ state: 'visible' });
+  await page.fill('#invite-code', INVITE);
+  await page.click('#btn-auth-submit');
+  await page.waitForURL('**/dashboard.html');
+  await expect(page.locator('#sidebar-user-display')).toContainText(username.toUpperCase());
+}
+async function loginAndOpen(page, username, password) {
+  await page.goto('/login.html');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('#btn-auth-submit');
+  await page.waitForURL('**/dashboard.html');
+  await expect(page.locator('#sidebar-user-display')).toContainText(username.toUpperCase());
+}
+// Add an account and wait for the encrypted upload to land (status 201 — even
+// if it took a 409->merge->retry to get there).
+async function addAccount(page, label, secret) {
+  const uploaded = page.waitForResponse((r) => r.url().includes('/api/backups/upload') && r.status() === 201);
+  await page.click('#btn-add-account');
+  await page.fill('#new-account-label', label);
+  await page.fill('#new-account-secret', secret);
+  await page.click('#btn-add-account-submit');
+  await uploaded;
+}
+
 // End-to-end smoke test of the zero-knowledge web dashboard against a real
 // running server: register (keys derived in-browser) -> add an account -> the
 // change is encrypted client-side and auto-saved to the cloud -> a reload
@@ -81,4 +111,38 @@ test('uploaded backup is ciphertext only (no plaintext secret leaks)', async ({ 
   const body = req.postData() || '';
   expect(body).toContain('"encrypted"');
   expect(body).not.toContain(secret);
+});
+
+// The headline reliability guarantee: two devices editing concurrently MERGE
+// instead of silently clobbering each other.
+test('two devices merge instead of clobbering (conflict resolution)', async ({ browser }) => {
+  const username = 'merge' + String(Date.now()).slice(-9);
+  const password = 'e2e-master-pass';
+
+  // Device A registers and adds an account.
+  const ctxA = await browser.newContext();
+  const pageA = await ctxA.newPage();
+  await registerAndOpen(pageA, username, password);
+  await addAccount(pageA, 'AlphaAcct', 'JBSWY3DPEHPK3PXP');
+
+  // Device B logs in as the same user and loads the current vault (sees Alpha).
+  const ctxB = await browser.newContext();
+  const pageB = await ctxB.newPage();
+  await loginAndOpen(pageB, username, password);
+  await expect(pageB.locator('.account-card')).toHaveCount(1);
+
+  // A adds Beta (bumps the server revision). Then B — still on its old revision —
+  // adds Gamma: the server returns 409 and B must MERGE, not overwrite.
+  await addAccount(pageA, 'BetaAcct', 'KRSXG5CTMVRXEZLU');
+  await addAccount(pageB, 'GammaAcct', 'MFRGGZDFMZTWQ2LK');
+
+  // B ends up with all three accounts — nobody's secret was lost.
+  await expect(pageB.locator('.account-card')).toHaveCount(3);
+  const text = (await pageB.locator('#accounts-grid-container').innerText()).toLowerCase();
+  expect(text).toContain('alpha');
+  expect(text).toContain('beta');
+  expect(text).toContain('gamma');
+
+  await ctxA.close();
+  await ctxB.close();
 });
