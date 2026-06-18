@@ -86,6 +86,53 @@ object CloudCrypto {
         }
     }
 
+    // ---- Account recovery (matches web crypto.js generateRecoveryKey/deriveRecovery/wrap) ----
+
+    data class RecoveryKeys(val wrapKey: ByteArray, val authKey: String)
+
+    /** A readable one-time recovery key, e.g. ABCDE-FGHJK-LMNPQ-RSTUV (~100 bits). */
+    fun generateRecoveryKey(): String {
+        val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no ambiguous 0/O/1/I
+        val bytes = ByteArray(20).also { SecureRandom().nextBytes(it) }
+        val sb = StringBuilder()
+        for (i in bytes.indices) {
+            sb.append(alphabet[(bytes[i].toInt() and 0xFF) % alphabet.length])
+            if ((i + 1) % 5 == 0 && i < bytes.size - 1) sb.append('-')
+        }
+        return sb.toString()
+    }
+
+    fun randomSalt(): ByteArray = ByteArray(SALT_LEN).also { SecureRandom().nextBytes(it) }
+
+    /** wrapKey (stays on device) + authKey (proves possession to the server). */
+    fun deriveRecovery(recoveryKey: String, salt: ByteArray): RecoveryKeys {
+        val normalized = recoveryKey.replace(Regex("[\\s-]"), "").uppercase()
+        val spec = PBEKeySpec(normalized.toCharArray(), salt, ITERATIONS, KEY_BITS)
+        val master = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        return RecoveryKeys(hmacSha256(master, "recovery-wrap"), hmacSha256(master, "recovery-auth").toHex())
+    }
+
+    /** AES-GCM wrap → base64(iv || ciphertext+tag). */
+    fun wrapBytes(plain: ByteArray, wrapKey: ByteArray): String {
+        val iv = ByteArray(IV_LEN).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapKey, "AES"), GCMParameterSpec(TAG_BITS, iv))
+        return b64(iv + cipher.doFinal(plain))
+    }
+
+    /** Reverses [wrapBytes]; throws if the wrap key is wrong. */
+    fun unwrapBytes(blobB64: String, wrapKey: ByteArray): ByteArray {
+        val combined = unb64(blobB64)
+        val iv = combined.copyOfRange(0, IV_LEN)
+        val ct = combined.copyOfRange(IV_LEN, combined.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(wrapKey, "AES"), GCMParameterSpec(TAG_BITS, iv))
+        return cipher.doFinal(ct)
+    }
+
+    /** Public base64 helper for callers needing to send raw bytes (e.g. the salt). */
+    fun toBase64(bytes: ByteArray): String = b64(bytes)
+
     // ---- primitives ----
 
     private fun hmacSha256(key: ByteArray, message: String): ByteArray {

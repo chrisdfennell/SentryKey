@@ -67,6 +67,7 @@ fun CloudBackupDialog(
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var statusError by remember { mutableStateOf(false) }
+    var showRecoverySetup by remember { mutableStateOf(false) }
 
     // Initialize from the persisted (stay-signed-in) session, if any.
     var token by remember { mutableStateOf(vaultStorage.getCloudToken()) }
@@ -220,6 +221,19 @@ fun CloudBackupDialog(
                         "✓ Signed in — your vault auto-backs-up after every change.",
                         color = Color(0xFF22C55E), fontSize = 11.sp
                     )
+
+                    val curEncKey = encKey
+                    if (showRecoverySetup && curEncKey != null) {
+                        RecoverySetupSection(
+                            vaultStorage = vaultStorage,
+                            encKey = curEncKey,
+                            onDone = { showRecoverySetup = false }
+                        )
+                    } else {
+                        TextButton(onClick = { showRecoverySetup = true }) {
+                            Text("🛟 Set up account recovery", color = brandOrange, fontSize = 13.sp)
+                        }
+                    }
 
                     Text("Backups on server", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     if (backups.isEmpty()) {

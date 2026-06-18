@@ -75,6 +75,61 @@ object CloudBackupClient {
             requestRaw(baseUrl, "/api/backups/file/$filename", "GET", token = token)
         }
 
+    // ---- Account recovery ----
+
+    data class RecoveryStart(val otpRequired: Boolean, val sentTo: List<String>)
+    data class RecoveryMaterial(val salt: String, val blob: String, val vault: String?)
+
+    /** Enrolls recovery for the signed-in user (client already wrapped the encKey). */
+    suspend fun setupRecovery(
+        baseUrl: String, token: String, salt: String, blob: String, authKey: String,
+        email: String, phone: String
+    ) = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("salt", salt); put("blob", blob); put("authKey", authKey)
+            put("email", email); put("phone", phone)
+        }
+        request(baseUrl, "/api/recovery/setup", "POST", token = token, body = body)
+        Unit
+    }
+
+    /** Begins recovery; sends an OTP if a channel is configured. */
+    suspend fun recoveryStart(baseUrl: String, username: String): RecoveryStart =
+        withContext(Dispatchers.IO) {
+            val res = request(baseUrl, "/api/recovery/start", "POST", body = JSONObject().put("username", username))
+            val arr = res.optJSONArray("sentTo") ?: JSONArray()
+            RecoveryStart(res.optBoolean("otpRequired", false), (0 until arr.length()).map { arr.getString(it) })
+        }
+
+    /** Fetches the wrapped recovery material + latest vault ciphertext. */
+    suspend fun recoveryFetch(baseUrl: String, username: String, otp: String?): RecoveryMaterial =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("username", username)
+            if (!otp.isNullOrBlank()) body.put("otp", otp)
+            val res = request(baseUrl, "/api/recovery/fetch", "POST", body = body)
+            RecoveryMaterial(res.getString("salt"), res.getString("blob"), res.optString("vault").ifEmpty { null })
+        }
+
+    /** Finalizes recovery (rotate login + recovery, store re-encrypted vault); returns a session token. */
+    suspend fun recoveryReset(
+        baseUrl: String, username: String, recoveryAuthKey: String, otp: String?,
+        newAuthKey: String, newRecoverySalt: String, newRecoveryBlob: String, newRecoveryAuthKey: String,
+        vault: String
+    ): String = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("username", username)
+            put("recoveryAuthKey", recoveryAuthKey)
+            if (!otp.isNullOrBlank()) put("otp", otp)
+            put("newAuthKey", newAuthKey)
+            put("newRecovery", JSONObject().apply {
+                put("salt", newRecoverySalt); put("blob", newRecoveryBlob); put("authKey", newRecoveryAuthKey)
+            })
+            put("vault", vault)
+        }
+        val res = request(baseUrl, "/api/recovery/reset", "POST", body = body)
+        res.optString("token").ifEmpty { throw CloudException("Recovery did not return a session token.") }
+    }
+
     // ---- HTTP plumbing ----
 
     private fun normalize(baseUrl: String) = baseUrl.trim().trimEnd('/')

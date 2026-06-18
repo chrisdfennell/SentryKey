@@ -109,6 +109,16 @@ private fun CloudAuthScreen(
     var isRegister by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var recovering by remember { mutableStateOf(false) }
+
+    if (recovering) {
+        RecoveryScreen(
+            vaultStorage = vaultStorage,
+            onRecovered = onSignedIn,
+            onBack = { recovering = false }
+        )
+        return
+    }
 
     fun submit() {
         if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
@@ -180,6 +190,12 @@ private fun CloudAuthScreen(
                 if (isRegister) "Have an account? Sign in" else "New here? Create an account",
                 color = orange, fontSize = 13.sp
             )
+        }
+
+        if (!isRegister) {
+            TextButton(onClick = { recovering = true }, enabled = !busy) {
+                Text("Forgot your master password?", color = mutedText, fontSize = 13.sp)
+            }
         }
 
         TextButton(onClick = onUseOffline, enabled = !busy) {

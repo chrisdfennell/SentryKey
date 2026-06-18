@@ -188,6 +188,38 @@ class VaultCryptoInstrumentedTest {
         CloudCrypto.decryptWithKey(envelope, b.encKey)
     }
 
+    // ---- Recovery key derivation (must match web crypto.js) ----
+
+    @Test
+    fun recovery_derivationMatchesWebVector() {
+        val salt = ByteArray(16) { it.toByte() }
+        val rec = CloudCrypto.deriveRecovery("ABCDE-FGHJK-LMNPQ-RSTUV", salt)
+        assertEquals(
+            "a9cea55a66214d39ef29e2fefa1872272b37fce3adb862af7320f01e0a77dcbf",
+            rec.wrapKey.joinToString("") { "%02x".format(it) }
+        )
+        assertEquals("1732ab38068ceca8ecb3b11472e503cf0c23e1841cc3f71e46a82b3c0b729a0d", rec.authKey)
+    }
+
+    @Test
+    fun recovery_normalizesKeyFormatting() {
+        val salt = ByteArray(16) { it.toByte() }
+        val a = CloudCrypto.deriveRecovery("abcde fghjk lmnpq rstuv", salt)
+        val b = CloudCrypto.deriveRecovery("ABCDE-FGHJK-LMNPQ-RSTUV", salt)
+        assertEquals(a.authKey, b.authKey)
+    }
+
+    @Test
+    fun recovery_wrapUnwrapRoundTrip() {
+        val keys = CloudCrypto.deriveUserKeys("dave", "masterpass")
+        val rec = CloudCrypto.deriveRecovery(CloudCrypto.generateRecoveryKey(), CloudCrypto.randomSalt())
+        val blob = CloudCrypto.wrapBytes(keys.encKey, rec.wrapKey)
+        assertEquals(
+            keys.encKey.joinToString("") { "%02x".format(it) },
+            CloudCrypto.unwrapBytes(blob, rec.wrapKey).joinToString("") { "%02x".format(it) }
+        )
+    }
+
     // ---- helpers ----
 
     private fun prefs() = ctx.getSharedPreferences("sentry_key_vault", android.content.Context.MODE_PRIVATE)
