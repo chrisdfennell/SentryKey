@@ -7,7 +7,7 @@ watch, the phone, Wear OS, and the server/web).
 | Platform | What's tested | Run it |
 |---|---|---|
 | **Server** (Node) | Zero-knowledge crypto vectors; SQLite account/session API; `users.json` → SQLite migration | `cd server && npm test` |
-| **Android app** | RFC 6238 TOTP, RFC 4648 Base32, vault sync-string parser (pure JVM — no emulator) | `cd companion && ./gradlew :app:testGithubDebugUnitTest` |
+| **Android app** | RFC 6238 TOTP, Base32, vault parser (pure JVM); **cloud / sync / backup / recovery crypto via Robolectric** with pinned cross-platform vectors | `cd companion && ./gradlew :app:testGithubDebugUnitTest` |
 | **Wear OS app** | RFC 6238 TOTP, Base32, vault parser (pure JVM) | `cd companion && ./gradlew :wear:testDebugUnitTest` |
 | **Garmin watch** | Pure Monkey C **SHA-1**, **HMAC-SHA1** (RFC 2202), **Base32**, **RFC 6238 TOTP** | `./build.ps1 -Test` (builds + runs in the Connect IQ simulator) |
 
@@ -19,9 +19,11 @@ catch test rot; the tests themselves are executed locally (`./build.ps1 -Test`)
 because the Connect IQ simulator isn't headless-friendly.
 
 ## Not yet covered
-- **Android at-rest / cloud crypto** — `CryptoManager` (Keystore) + `CloudCrypto`
-  use Android-only APIs, so they live in an instrumented test
-  (`./gradlew connectedDebugAndroidTest`, needs a device/emulator); not yet in CI.
+- **Android at-rest (Keystore)** — `CryptoManager` + `VaultStorage` persistence use
+  the `AndroidKeyStore`, which Robolectric can't provide, so they stay in an
+  instrumented test (`./gradlew connectedDebugAndroidTest`, needs a device/emulator).
+  Everything else — cloud, sync, backup, recovery — now runs headlessly in CI
+  (`CloudCryptoRobolectricTest`).
 - **iOS** — blocked on creating the Xcode project; then XCTest on a macOS runner.
 - **Web dashboard UI** — `crypto.js` is exercised by the server suite; no Playwright
   end-to-end test yet.

@@ -10,10 +10,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Runtime verification of the encryption work. Needs a device/emulator because
- * it exercises the Android Keystore (CryptoManager) and android.util.Base64.
+ * Device/emulator tests for the parts that need the real Android Keystore
+ * (CryptoManager + VaultStorage's at-rest encryption). The AndroidKeyStore
+ * provider isn't available under Robolectric, so these must run instrumented:
  *
- * Run with: ./gradlew connectedDebugAndroidTest
+ *   ./gradlew connectedDebugAndroidTest
+ *
+ * The password-based crypto (CloudCrypto / SyncCrypto / backups / recovery) and
+ * its cross-platform pinned vectors moved to CloudCryptoRobolectricTest, which
+ * runs headlessly in CI.
  */
 @RunWith(AndroidJUnit4::class)
 class VaultCryptoInstrumentedTest {
@@ -76,148 +81,6 @@ class VaultCryptoInstrumentedTest {
         assertNull(prefs().getString("accounts", null))
         assertFalse(prefs().all.toString().contains("GEZDGNBVGY3TQOJQ"))
         assertEquals(migrated, VaultStorage(ctx).getAccounts())
-    }
-
-    // ---- Passphrase-encrypted backups ----
-
-    @Test
-    fun backup_encryptDecryptRoundTrip() {
-        val accounts = listOf(TwoFactorAccount("GitHub", "KRSXG5CTMVRXEZLU"))
-        val envelope = ExportImport.accountsToEncryptedJson(accounts, "correct horse battery")
-        assertTrue(ExportImport.isEncryptedBackup(envelope))
-        assertFalse("backup must not contain the raw secret", envelope.contains("KRSXG5CTMVRXEZLU"))
-
-        val restored = ExportImport.parseEncryptedImport(envelope, "correct horse battery")
-        assertEquals(accounts, restored)
-    }
-
-    @Test(expected = BadPasswordException::class)
-    fun backup_wrongPassphraseThrows() {
-        val envelope = ExportImport.accountsToEncryptedJson(
-            listOf(TwoFactorAccount("GitHub", "KRSXG5CTMVRXEZLU")), "right-pass"
-        )
-        ExportImport.parseEncryptedImport(envelope, "wrong-pass")
-    }
-
-    @Test
-    fun isEncryptedBackup_falseForPlaintextBackup() {
-        val plain = ExportImport.accountsToJson(listOf(TwoFactorAccount("X", "AAAA")))
-        assertFalse(ExportImport.isEncryptedBackup(plain))
-    }
-
-    // ---- BLE sync crypto (cross-platform contract) ----
-
-    // Canonical vector computed independently (.NET PBKDF2/HMAC). The watch
-    // (Monkey C) and iOS (Swift) implementations MUST reproduce this exact wire
-    // string for the same inputs, or cross-platform sync will silently fail.
-    private val vecPass = "test-pass"
-    private val vecPlain = "GitHub:JBSWY3DPEHPK3PXP"
-    private val vecSalt = ByteArray(16) { it.toByte() }
-    private val vecNonce = byteArrayOf(
-        0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(),
-        0xA4.toByte(), 0xA5.toByte(), 0xA6.toByte(), 0xA7.toByte()
-    )
-    private val vecWire =
-        "SKENC1:AAECAwQFBgcICQoLDA0OD6ChoqOkpaanAMqKldiMz3e/git9BdiyOnVodURmahH/V2HnuJdkGraUkLOzv6HzilcSlw=="
-
-    @Test
-    fun syncCrypto_matchesCanonicalVector() {
-        assertEquals(vecWire, SyncCrypto.encryptWith(vecPlain, vecPass, vecSalt, vecNonce))
-    }
-
-    @Test
-    fun syncCrypto_decryptsCanonicalVector() {
-        assertEquals(vecPlain, SyncCrypto.decrypt(vecWire, vecPass))
-    }
-
-    @Test
-    fun syncCrypto_roundTripsRandom() {
-        val plain = "Discord:user:JBSWY3DPEHPK3PXP,GitHub:KRSXG5CTMVRXEZLU"
-        val wire = SyncCrypto.encrypt(plain, "hunter2pass")
-        assertTrue(SyncCrypto.isEncrypted(wire))
-        assertFalse("payload must not leak plaintext", wire.contains("JBSWY3DPEHPK3PXP"))
-        assertEquals(plain, SyncCrypto.decrypt(wire, "hunter2pass"))
-    }
-
-    @Test(expected = BadPasswordException::class)
-    fun syncCrypto_wrongPassphraseThrows() {
-        SyncCrypto.decrypt(SyncCrypto.encrypt("Acct:AAAA", "right"), "wrong")
-    }
-
-    @Test
-    fun syncCrypto_isEncryptedFalseForPlaintextSyncString() {
-        assertFalse(SyncCrypto.isEncrypted("GitHub:JBSWY3DPEHPK3PXP,Discord:KRSXG5CTMVRXEZLU"))
-    }
-
-    // ---- Cloud zero-knowledge crypto (must match the web dashboard) ----
-
-    // Vector computed from the web crypto.js deriveUserKeys (server/_vector.js).
-    // If these drift, phone backups won't open in the browser (and vice-versa).
-    @Test
-    fun cloudCrypto_keyDerivationMatchesWebVector() {
-        val keys = CloudCrypto.deriveUserKeys("alice", "supersecuremasterpassword")
-        assertEquals("68c6d3429e6d6b8025aa38fc281779b1cf308a90e6422888c94aceeb621bc0f4", keys.authKey)
-        assertEquals(
-            "3294dbf0fca8ca2c526b1397fb9bd6c1175caf5674fb5ccbf99af4956a9dbb03",
-            keys.encKey.joinToString("") { "%02x".format(it) }
-        )
-    }
-
-    @Test
-    fun cloudCrypto_usernameIsCaseInsensitive() {
-        val a = CloudCrypto.deriveUserKeys("Alice", "supersecuremasterpassword")
-        val b = CloudCrypto.deriveUserKeys("alice", "supersecuremasterpassword")
-        assertEquals(a.authKey, b.authKey)
-    }
-
-    @Test
-    fun cloudCrypto_encryptDecryptRoundTrip() {
-        val keys = CloudCrypto.deriveUserKeys("bob", "hunter2hunter2")
-        val vault = """{"app":"SentryKey","version":1,"accounts":[{"label":"GitHub","secret":"KRSXG5CTMVRXEZLU"}]}"""
-        val envelope = CloudCrypto.encryptWithKey(vault, keys.encKey)
-        assertTrue(ExportImport.isEncryptedBackup(envelope))
-        assertFalse(envelope.contains("KRSXG5CTMVRXEZLU"))
-        assertEquals(vault, CloudCrypto.decryptWithKey(envelope, keys.encKey))
-    }
-
-    @Test(expected = BadPasswordException::class)
-    fun cloudCrypto_wrongKeyThrows() {
-        val a = CloudCrypto.deriveUserKeys("carol", "passwordone")
-        val b = CloudCrypto.deriveUserKeys("carol", "passwordtwo")
-        val envelope = CloudCrypto.encryptWithKey("{\"accounts\":[]}", a.encKey)
-        CloudCrypto.decryptWithKey(envelope, b.encKey)
-    }
-
-    // ---- Recovery key derivation (must match web crypto.js) ----
-
-    @Test
-    fun recovery_derivationMatchesWebVector() {
-        val salt = ByteArray(16) { it.toByte() }
-        val rec = CloudCrypto.deriveRecovery("ABCDE-FGHJK-LMNPQ-RSTUV", salt)
-        assertEquals(
-            "a9cea55a66214d39ef29e2fefa1872272b37fce3adb862af7320f01e0a77dcbf",
-            rec.wrapKey.joinToString("") { "%02x".format(it) }
-        )
-        assertEquals("1732ab38068ceca8ecb3b11472e503cf0c23e1841cc3f71e46a82b3c0b729a0d", rec.authKey)
-    }
-
-    @Test
-    fun recovery_normalizesKeyFormatting() {
-        val salt = ByteArray(16) { it.toByte() }
-        val a = CloudCrypto.deriveRecovery("abcde fghjk lmnpq rstuv", salt)
-        val b = CloudCrypto.deriveRecovery("ABCDE-FGHJK-LMNPQ-RSTUV", salt)
-        assertEquals(a.authKey, b.authKey)
-    }
-
-    @Test
-    fun recovery_wrapUnwrapRoundTrip() {
-        val keys = CloudCrypto.deriveUserKeys("dave", "masterpass")
-        val rec = CloudCrypto.deriveRecovery(CloudCrypto.generateRecoveryKey(), CloudCrypto.randomSalt())
-        val blob = CloudCrypto.wrapBytes(keys.encKey, rec.wrapKey)
-        assertEquals(
-            keys.encKey.joinToString("") { "%02x".format(it) },
-            CloudCrypto.unwrapBytes(blob, rec.wrapKey).joinToString("") { "%02x".format(it) }
-        )
     }
 
     // ---- helpers ----

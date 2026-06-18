@@ -102,8 +102,12 @@ android {
         buildConfig = true
     }
     testOptions {
-        // Pure-JVM unit tests; return defaults for any incidental Android stub call.
-        unitTests.isReturnDefaultValues = true
+        unitTests {
+            // Robolectric needs the merged manifest/resources; return defaults for
+            // any incidental Android stub call in plain-JVM tests.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 }
 
@@ -128,6 +132,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     testImplementation(libs.junit)
+    // Robolectric: run the android.util.Base64-dependent crypto tests headlessly.
+    testImplementation(libs.androidx.junit)
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
