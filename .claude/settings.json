@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "PowerShell(& \"$PSScriptRoot\\\\build.ps1\" -Device fenix8solar51mm 2>&1 | Out-String)",
-      "PowerShell(& \"c:\\\\programming\\\\SentryKey\\\\build.ps1\" -Device fenix8solar51mm 2>&1)"
+      "PowerShell(& \"c:\\\\programming\\\\SentryKey\\\\build.ps1\" -Device fenix8solar51mm 2>&1)",
+      "PowerShell(& \"c:\\\\programming\\\\SentryKey\\\\build.ps1\" -Device fenix847mm 2>&1)",
+      "Bash(ls README*)",
+      "Bash(ls companion/README*)",
+      "Bash(cat app/src/main/AndroidManifest.xml)",
+      "Bash(cat app/build.gradle)",
+      "Bash(cat app/build.gradle.kts)",
+      "PowerShell(cd c:\\\\programming\\\\SentryKey\\\\companion; .\\\\gradlew.bat processReleaseManifest --console=plain 2>&1 | Select-Object -Last 5 | Out-String; \"=== REQUEST_INSTALL_PACKAGES in merged RELEASE manifest? ===\"; $m = Get-ChildItem -Recurse -Path app\\\\build -Filter AndroidManifest.xml -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'release' } | Select-Object -First 1; if \\($m\\) { if \\(Select-String -Path $m.FullName -Pattern 'REQUEST_INSTALL_PACKAGES' -Quiet\\) { \"FOUND \\(bad\\)\" } else { \"absent \\(good\\): $\\($m.FullName\\)\" } } else { \"no release manifest found\" })",
+      "Bash(git tag *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\christopher.fennell\\.claude\\projects\\c--programming-SentryKey\\memory"

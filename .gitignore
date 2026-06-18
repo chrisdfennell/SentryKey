@@ -27,3 +27,4 @@ developer_key.der.base64
 *.class
 .DS_Store
 Thumbs.db
+.claude/settings.json
