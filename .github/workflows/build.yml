@@ -31,6 +31,12 @@ jobs:
           fi
           echo "${{ secrets.GARMIN_DEVELOPER_KEY }}" | base64 -d > developer_key.der
 
+      # manifest.xml lists every supported watch (source of truth). Trim it to the
+      # devices THIS build image's SDK actually has, so an older CI SDK still builds
+      # the subset it knows. A local/newer SDK (and the store .iq) builds them all.
+      - name: Filter manifest to SDK-supported devices
+        run: sh ci/filter-devices.sh
+
       - name: Compile Garmin App
         run: |
           mkdir -p bin
