@@ -146,3 +146,46 @@ test('two devices merge instead of clobbering (conflict resolution)', async ({ b
   await ctxA.close();
   await ctxB.close();
 });
+
+// Zero-knowledge recovery via the downloadable Emergency Kit: set up recovery,
+// download the kit, then upload it on a fresh session to restore the vault under
+// a new master password — no SMS/email provider involved.
+test('recover the vault by uploading the Emergency Kit', async ({ page }) => {
+  const username = 'rec' + String(Date.now()).slice(-9);
+  const password = 'original-master-pass';
+  const newPassword = 'brand-new-master-pass';
+
+  await registerAndOpen(page, username, password);
+  await addAccount(page, 'RecoverMe', 'JBSWY3DPEHPK3PXP'); // a vault to recover
+
+  // Set up recovery and download the Emergency Kit.
+  await page.click('#nav-recovery');
+  await expect(page.locator('#recovery-key-value')).not.toHaveText('');
+  const downloadPromise = page.waitForEvent('download');
+  await page.click('#btn-download-kit'); // also auto-ticks the confirm box
+  const kitPath = await (await downloadPromise).path();
+  const setupResp = page.waitForResponse((r) => r.url().includes('/api/recovery/setup') && r.status() === 200);
+  await page.click('#btn-recovery-enable');
+  await setupResp;
+
+  // Fresh session: log out, then recover by uploading the kit.
+  await page.click('#btn-logout');
+  await page.waitForURL('**/login.html');
+  await page.click('#link-forgot');
+  await page.setInputFiles('#rec-kit-file', kitPath);
+  await expect(page.locator('#rec-username')).toHaveValue(username);     // auto-filled
+  await expect(page.locator('#rec-key')).not.toHaveValue('');            // auto-filled
+  await page.fill('#rec-new-pass', newPassword);
+  await page.fill('#rec-new-pass2', newPassword);
+  await page.click('#btn-rec-submit');
+
+  // Lands on the dashboard with the vault restored.
+  await page.waitForURL('**/dashboard.html', { timeout: 30_000 });
+  await expect(page.locator('.account-card')).toContainText(/recoverme/i);
+
+  // The NEW password works on a fresh login (and the vault is intact).
+  await page.click('#btn-logout');
+  await page.waitForURL('**/login.html');
+  await loginAndOpen(page, username, newPassword);
+  await expect(page.locator('.account-card')).toContainText(/recoverme/i);
+});

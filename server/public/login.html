@@ -155,6 +155,7 @@
           vault and lets you set a new master password. (No recovery key = no recovery — that's
           zero-knowledge.)
         </p>
+        <button type="button" class="btn btn-secondary" id="btn-rec-upload" style="width:100%; margin-bottom:18px;">📥 Upload Emergency Kit (auto-fills your details)</button>
         <div class="form-group">
           <label for="rec-username">Username</label>
           <input type="text" id="rec-username" class="input-field" placeholder="Username" autocomplete="username" />
@@ -164,7 +165,7 @@
           <input type="text" id="rec-otp" class="input-field" placeholder="6-digit code" inputmode="numeric" />
         </div>
         <div class="form-group">
-          <label for="rec-key">Recovery key <span style="text-transform:none; font-weight:400;">— <a href="#" id="rec-upload-link" style="color:var(--orange);">upload Emergency Kit</a></span></label>
+          <label for="rec-key">Recovery key</label>
           <input type="text" id="rec-key" class="input-field" placeholder="ABCDE-FGHJK-LMNPQ-RSTUV" autocomplete="off" />
           <input type="file" id="rec-kit-file" accept=".txt" style="display:none;" />
         </div>
@@ -367,17 +368,25 @@
       $("link-forgot").addEventListener("click", (e) => { e.preventDefault(); modal.classList.add("open"); });
       $("btn-rec-cancel").addEventListener("click", () => modal.classList.remove("open"));
 
-      // Upload Emergency Kit -> extract the recovery key into the field.
-      const elKitLink = $("rec-upload-link"), elKitFile = $("rec-kit-file");
-      if (elKitLink && elKitFile) {
-        elKitLink.addEventListener("click", (e) => { e.preventDefault(); elKitFile.click(); });
+      // Upload Emergency Kit -> auto-fill username + recovery key.
+      const elKitBtn = $("btn-rec-upload"), elKitFile = $("rec-kit-file");
+      if (elKitBtn && elKitFile) {
+        elKitBtn.addEventListener("click", () => elKitFile.click());
         elKitFile.addEventListener("change", (e) => {
           const file = e.target.files[0]; if (!file) return;
           const reader = new FileReader();
           reader.onload = (ev) => {
-            const m = String(ev.target.result).match(/Recovery key:\s*([^\r\n]+)/i);
-            if (m) { $("rec-key").value = m[1].trim(); showToast("Emergency Kit loaded.", "success"); }
-            else showToast("Couldn't find a recovery key in that file.", "error");
+            const text = String(ev.target.result);
+            const keyM = text.match(/Recovery key:\s*([^\r\n]+)/i);
+            const userM = text.match(/Account:\s*([^\r\n]+)/i);
+            if (userM) $("rec-username").value = userM[1].trim();
+            if (keyM) {
+              $("rec-key").value = keyM[1].trim();
+              showToast("Emergency Kit loaded — just set a new password.", "success");
+              $("rec-new-pass").focus();
+            } else {
+              showToast("Couldn't read a recovery key from that file.", "error");
+            }
           };
           reader.readAsText(file);
           e.target.value = "";
