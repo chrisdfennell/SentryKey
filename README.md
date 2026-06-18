@@ -17,6 +17,21 @@
 
 ---
 
+## 🧪 Beta testers wanted!
+
+I'm looking for testers for the **SentryKey Android app** — now in **closed beta on Google Play**. It's free; try it out, kick the tires, and tell me what breaks or feels confusing.
+
+**Join the beta (pick either):**
+
+- 🌐 **On the web:** **[play.google.com/apps/testing/com.fennell.sentrykey](https://play.google.com/apps/testing/com.fennell.sentrykey)**
+- 🤖 **On your Android phone:** **[play.google.com/store/apps/details?id=com.fennell.sentrykey](https://play.google.com/store/apps/details?id=com.fennell.sentrykey)**
+
+Opt in through either link, then install (or update) from the Play Store. Hit a bug or have feedback? **[Open an issue](https://github.com/chrisdfennell/SentryKey/issues)** — it genuinely helps. 🙏
+
+> Prefer to sideload? Grab the APK from the [latest release](https://github.com/chrisdfennell/SentryKey/releases/latest).
+
+---
+
 ## ✨ Features
 
 - ⌚ **Standalone watch authenticator** — RFC 6238 TOTP codes generated **on-device**, even with no phone nearby.
