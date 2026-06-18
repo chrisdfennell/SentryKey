@@ -343,6 +343,10 @@ fun SentryKeyDashboard(
             }
         }
     }
+    // When a multi-device conflict is auto-merged, refresh the on-screen vault.
+    autoSync.onMerged = { merged ->
+        (context as? android.app.Activity)?.runOnUiThread { accounts = merged }
+    }
     var autoSyncPrimed by remember { mutableStateOf(false) }
     LaunchedEffect(accounts) {
         // Skip the initial load; only react to real changes.

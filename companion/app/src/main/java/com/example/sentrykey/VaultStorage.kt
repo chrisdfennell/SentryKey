@@ -100,6 +100,7 @@ class VaultStorage(context: Context) {
     private val cloudEncKeyKey = "cloud_enckey_enc"
     private val onboardedKey = "onboarded"
     private val lastSyncHashKey = "cloud_last_sync_hash"
+    private val cloudVaultRevKey = "cloud_vault_rev"
 
     fun getCloudServerUrl(): String =
         prefs.getString(cloudUrlKey, null) ?: CloudBackupClient.DEFAULT_SERVER_URL
@@ -157,7 +158,7 @@ class VaultStorage(context: Context) {
 
     /** Clears the cloud session (sign out). Leaves server URL + username for prefill. */
     fun clearCloudSession() {
-        prefs.edit().remove(cloudTokenKey).remove(cloudEncKeyKey).remove(lastSyncHashKey).apply()
+        prefs.edit().remove(cloudTokenKey).remove(cloudEncKeyKey).remove(lastSyncHashKey).remove(cloudVaultRevKey).apply()
     }
 
     // ---- First-run onboarding + sync bookkeeping ----
@@ -174,6 +175,10 @@ class VaultStorage(context: Context) {
     /** Hash of the vault at last successful cloud backup — lets background sync skip no-op uploads. */
     fun getLastSyncHash(): String = prefs.getString(lastSyncHashKey, "") ?: ""
     fun setLastSyncHash(hash: String) { prefs.edit().putString(lastSyncHashKey, hash).apply() }
+
+    /** Server vault revision we last synced from — drives multi-device conflict detection. */
+    fun getCloudVaultRev(): Int = prefs.getInt(cloudVaultRevKey, 0)
+    fun setCloudVaultRev(rev: Int) { prefs.edit().putInt(cloudVaultRevKey, rev).apply() }
 
     // Parses the watch vault string "label:secret,label:secret". Delegates to the
     // top-level parseVaultString (pure logic, unit-tested). Used by watch -> phone

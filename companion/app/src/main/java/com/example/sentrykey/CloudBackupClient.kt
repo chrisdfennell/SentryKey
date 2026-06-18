@@ -10,6 +10,9 @@ import java.net.URL
 /** Surfaced to the UI with a human-readable message (often straight from the server). */
 class CloudException(message: String) : Exception(message)
 
+/** Thrown on HTTP 409 when the server vault advanced past the client's base revision. */
+class CloudConflictException(val currentRev: Int) : Exception("Vault changed on another device.")
+
 /**
  * Talks to the SentryKey zero-knowledge backup server (see /server). Only ever
  * sends the derived authKey and the already-encrypted vault envelope — never the
@@ -62,11 +65,21 @@ object CloudBackupClient {
             }
         }
 
-    /** Uploads an encrypted envelope; returns the server-assigned filename. */
-    suspend fun uploadBackup(baseUrl: String, token: String, envelopeJson: String): String =
+    /** Server-assigned filename + the new vault revision after an upload. */
+    data class UploadResult(val filename: String, val rev: Int)
+
+    /**
+     * Uploads an encrypted envelope. If [baseRev] is non-null it's sent as
+     * X-Base-Rev for optimistic concurrency — the server replies 409 (surfaced as
+     * [CloudConflictException]) if another device uploaded since. Pass null to
+     * force the upload (legacy behavior, e.g. the manual "back up now" button).
+     */
+    suspend fun uploadBackup(baseUrl: String, token: String, envelopeJson: String, baseRev: Int? = null): UploadResult =
         withContext(Dispatchers.IO) {
-            val res = request(baseUrl, "/api/backups/upload", "POST", token = token, rawBody = envelopeJson)
-            res.optString("filename")
+            val headers = baseRev?.let { mapOf("X-Base-Rev" to it.toString()) }
+            val text = requestRaw(baseUrl, "/api/backups/upload", "POST", token = token, payload = envelopeJson, extraHeaders = headers)
+            val res = if (text.isBlank()) JSONObject() else JSONObject(text)
+            UploadResult(res.optString("filename"), res.optInt("rev", 0))
         }
 
     /** Downloads a backup's raw encrypted envelope JSON. */
@@ -152,7 +165,8 @@ object CloudBackupClient {
         path: String,
         method: String,
         token: String? = null,
-        payload: String? = null
+        payload: String? = null,
+        extraHeaders: Map<String, String>? = null
     ): String {
         val url = URL(normalize(baseUrl) + path)
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -161,6 +175,7 @@ object CloudBackupClient {
             readTimeout = 30_000
             setRequestProperty("Accept", "application/json")
             if (token != null) setRequestProperty("X-Session-Token", token)
+            extraHeaders?.forEach { (k, v) -> setRequestProperty(k, v) }
             if (payload != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json")
@@ -173,11 +188,17 @@ object CloudBackupClient {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code == 409) {
+                val rev = try { JSONObject(text).optInt("currentRev", 0) } catch (e: Exception) { 0 }
+                throw CloudConflictException(rev)
+            }
             if (code !in 200..299) {
                 throw CloudException(parseError(text, code))
             }
             return text
         } catch (e: CloudException) {
+            throw e
+        } catch (e: CloudConflictException) {
             throw e
         } catch (e: Exception) {
             throw CloudException("Couldn't reach the server. Check the URL and your connection.")
