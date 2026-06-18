@@ -70,12 +70,17 @@ locally. The watch never needs the phone again until you add a new account.
 
 ## ⌚ Supported watches
 
-Built for the **fenix 8 / tactix** family (Connect IQ API 3.2+):
+Runs on **100+ round Garmin watches** (Connect IQ API 3.2+) — the whole UI is
+resolution-independent (proportional countdown ring, round-screen-aware labels,
+auto-scaling fonts), so it adapts from 218px to 454px screens. Square/rectangular
+devices are intentionally excluded (the ring UI is built for round faces).
 
-- fenix 8 43mm / 47mm (AMOLED)
-- fenix 8 Solar 47mm / 51mm (MIP)
+Families covered include **fenix** (5 Plus → 8), **epix**, **Forerunner**
+(55/165/2xx/9xx…), **venu** (1/2/3/441/445), **vivoactive** (3→6), **Instinct**
+(2/3/Crossover/E), **MARQ** (1/2), **Descent**, **Enduro**, **D2**, **Approach
+S7x**, and the **tactix / legacy hero** series.
 
-Other Connect IQ devices can be added in [`manifest.xml`](manifest.xml).
+The full device list is in [`manifest.xml`](manifest.xml); add or remove products there.
 
 ---
 
