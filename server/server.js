@@ -22,6 +22,17 @@ const PLANS = {
 };
 function planInfo(plan) { return PLANS[plan] || PLANS.free; }
 
+// Admins are normal zero-knowledge accounts whose username is listed in
+// ADMIN_USERS (.env, comma-separated). They can view account METADATA (usernames,
+// plans, usage) and set plans — never vault contents, which stay encrypted.
+const ADMIN_USERS = (process.env.ADMIN_USERS || '')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+function isAdmin(username) { return ADMIN_USERS.includes(String(username || '').toLowerCase()); }
+function requireAdmin(req, res, next) {
+  if (!isAdmin(req.username)) return res.status(403).json({ error: 'Admin access required.' });
+  next();
+}
+
 const BACKUPS_DIR = process.env.BACKUPS_DIR || path.join(__dirname, 'backups');
 const DB_DIR = process.env.DB_DIR || path.join(__dirname, 'db');
 const LEGACY_DB_FILE = path.join(DB_DIR, 'users.json');
@@ -237,25 +248,57 @@ app.get('/api/account', apiLimiter, authenticateSession, (req, res) => {
   const user = store.getUser(req.username) || {};
   const plan = user.plan || 'free';
   const info = planInfo(plan);
-  let count = 0, bytes = 0;
-  try {
-    const dir = path.join(BACKUPS_DIR, req.username);
-    if (fs.existsSync(dir)) {
-      for (const f of fs.readdirSync(dir)) {
-        if (f.startsWith('backup-') && f.endsWith('.skbackup')) {
-          count += 1;
-          bytes += fs.statSync(path.join(dir, f)).size;
-        }
-      }
-    }
-  } catch (_) { /* best effort */ }
+  const usage = backupUsage(req.username);
   res.json({
     username: req.username,
     plan,
     planLabel: info.label,
+    isAdmin: isAdmin(req.username),
     createdAt: user.createdAt || null,
-    backups: { count, bytes, max: info.maxBackups },
+    backups: { count: usage.count, bytes: usage.bytes, max: info.maxBackups },
   });
+});
+
+// --- Admin (managed-service operator tools; metadata only, zero-knowledge intact) ---
+
+// List all accounts with metadata + usage.
+app.get('/api/admin/users', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const users = store.allUsers().map((u) => ({
+    username: u.username,
+    plan: u.plan || 'free',
+    createdAt: u.createdAt || null,
+    hasRecovery: !!u.recovery,
+    backups: backupUsage(u.username),
+  })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  res.json({ users, plans: Object.keys(PLANS) });
+});
+
+// Server-wide totals.
+app.get('/api/admin/stats', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const users = store.allUsers();
+  const planCounts = {};
+  let totalBackups = 0, totalBytes = 0;
+  for (const u of users) {
+    const plan = u.plan || 'free';
+    planCounts[plan] = (planCounts[plan] || 0) + 1;
+    const usage = backupUsage(u.username);
+    totalBackups += usage.count;
+    totalBytes += usage.bytes;
+  }
+  res.json({ users: users.length, totalBackups, totalBytes, planCounts });
+});
+
+// Set a user's plan — the only way to grant "pro" until billing exists.
+app.post('/api/admin/users/:username/plan', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
+  const target = String(req.params.username || '').trim().toLowerCase();
+  const plan = String(req.body.plan || '').trim().toLowerCase();
+  if (!PLANS[plan]) return res.status(400).json({ error: 'Unknown plan.' });
+  const user = store.getUser(target);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  user.plan = plan;
+  store.putUser(target, user);
+  console.log(`Admin ${req.username} set ${target} -> ${plan}`);
+  res.json({ username: target, plan });
 });
 
 // --- Zero-Knowledge Account Recovery ---
@@ -275,6 +318,23 @@ function recoveryChannels(user) {
   if (user.email && notify.emailEnabled) ch.push('email');
   if (user.phone && notify.smsEnabled) ch.push('sms');
   return ch;
+}
+
+// Backup file count + total bytes for a user (metadata only, no contents read).
+function backupUsage(username) {
+  let count = 0, bytes = 0;
+  try {
+    const dir = path.join(BACKUPS_DIR, username);
+    if (fs.existsSync(dir)) {
+      for (const f of fs.readdirSync(dir)) {
+        if (f.startsWith('backup-') && f.endsWith('.skbackup')) {
+          count += 1;
+          bytes += fs.statSync(path.join(dir, f)).size;
+        }
+      }
+    }
+  } catch (_) { /* best effort */ }
+  return { count, bytes };
 }
 
 // Newest stored backup ciphertext for a user, or null.

@@ -26,7 +26,7 @@ function startServer({ port, dbDir, backupsDir }) {
   // Set a known passphrase in the child env. dotenv.config() does NOT override
   // already-set vars, so this wins over any server/.env and keeps the test
   // deterministic; register calls pass it as the invite code.
-  const env = { ...process.env, PORT: String(port), DB_DIR: dbDir, BACKUPS_DIR: backupsDir, SERVER_ACCESS_PASSPHRASE: INVITE };
+  const env = { ...process.env, PORT: String(port), DB_DIR: dbDir, BACKUPS_DIR: backupsDir, SERVER_ACCESS_PASSPHRASE: INVITE, ADMIN_USERS: 'adminuser' };
   // stderr is inherited (not piped) to avoid a libuv handle-close assertion on
   // Windows when the child is killed.
   return spawn(process.execPath, ['server.js'], { cwd: __dirname, env, stdio: ['ignore', 'ignore', 'inherit'] });
@@ -120,9 +120,39 @@ async function phaseMigration() {
   }
 }
 
+async function phaseAdmin() {
+  console.log('\n--- Phase C: admin panel ---');
+  const port = 38213, dbDir = mkTmp('skdb3-'), backupsDir = mkTmp('skbk3-'), base = `http://127.0.0.1:${port}`;
+  const srv = startServer({ port, dbDir, backupsDir });
+  try {
+    await waitReady(base);
+    const adminK = 'admin-authkey', userK = 'user-authkey';
+    await jpost(base, '/api/auth/register', { username: 'adminuser', authKey: adminK, inviteCode: INVITE });
+    await jpost(base, '/api/auth/register', { username: 'normaluser', authKey: userK, inviteCode: INVITE });
+    const adminAuth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'adminuser', authKey: adminK })).body?.token };
+    const userAuth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'normaluser', authKey: userK })).body?.token };
+
+    const list = await jget(base, '/api/admin/users', adminAuth);
+    check('admin can list users (2)', list.status === 200 && list.body?.users?.length === 2);
+    check('non-admin -> 403 on admin list', (await jget(base, '/api/admin/users', userAuth)).status === 403);
+
+    const setp = await jpost(base, '/api/admin/users/normaluser/plan', { plan: 'pro' }, adminAuth);
+    check('admin sets plan -> pro', setp.status === 200 && setp.body?.plan === 'pro');
+
+    const acct = await jget(base, '/api/account', userAuth);
+    check('user account reflects pro plan', acct.body?.plan === 'pro' && acct.body?.planLabel === 'Pro');
+    check('isAdmin true for admin, false for user',
+      (await jget(base, '/api/account', adminAuth)).body?.isAdmin === true && acct.body?.isAdmin === false);
+    check('unknown plan -> 400', (await jpost(base, '/api/admin/users/normaluser/plan', { plan: 'enterprise' }, adminAuth)).status === 400);
+  } finally {
+    srv.kill();
+  }
+}
+
 (async () => {
   await phaseFresh();
   await phaseMigration();
+  await phaseAdmin();
   console.log(`\n${failures === 0 ? 'ALL PASS ✅' : failures + ' FAILURE(S) ❌'}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

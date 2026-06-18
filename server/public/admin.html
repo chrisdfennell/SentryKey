@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SentryKey — Admin</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/assets/app_icon.png" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .admin-wrap { max-width: 1000px; margin: 110px auto 80px; padding: 0 20px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card { padding: 20px; border-radius: 14px; }
+    .stat-card .num { font-size: 26px; font-weight: 800; color: var(--orange); }
+    .stat-card .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--card-border); font-size: 14px; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+    .plan-select { background: rgba(16,18,26,0.9); border: 1px solid var(--card-border); color: white; border-radius: 8px; padding: 6px 10px; }
+    .denied { text-align: center; margin: 130px auto; max-width: 440px; padding: 44px; border-radius: 16px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="/dashboard.html" class="logo" id="nav-logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;margin-right:8px;">
+          <rect width="48" height="48" rx="10" fill="#0A0B0E"/>
+          <path d="M24 10 L34 14 V24 C34 30.5 29.5 35.5 24 38 C18.5 35.5 14 30.5 14 24 V14 L24 10 Z" fill="#10121A" stroke="#FFA500" stroke-width="1.8"/>
+        </svg>
+        Sentry<span>Key</span>&nbsp; <span style="color:var(--text-secondary); font-weight:500;">Admin</span>
+      </a>
+      <a href="/dashboard.html" class="btn btn-secondary" style="padding:8px 14px;">← Dashboard</a>
+    </div>
+  </nav>
+
+  <div class="admin-wrap" id="admin-content" style="display:none;">
+    <h1 style="margin-bottom:6px;">Admin</h1>
+    <p style="color:var(--text-secondary); margin-bottom:28px;">Account metadata &amp; plan management. Vault contents are encrypted — never visible here.</p>
+
+    <div class="stat-grid" id="stat-grid"></div>
+
+    <div class="glass" style="padding:24px; border-radius:16px;">
+      <h2 style="font-size:18px; margin-bottom:16px;">Users</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Username</th><th>Plan</th><th>Backups</th><th>Storage</th><th>Recovery</th><th>Joined</th></tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="denied glass" id="denied" style="display:none;">
+    <div style="font-size:40px; margin-bottom:12px;">🔒</div>
+    <h2>Not an admin</h2>
+    <p style="color:var(--text-secondary); margin:12px 0 22px;">This account doesn't have admin access. Add its username to <code>ADMIN_USERS</code> in the server's .env and restart.</p>
+    <a href="/dashboard.html" class="btn btn-primary">Back to dashboard</a>
+  </div>
+
+  <div id="toast-notification" class="toast">Done</div>
+
+  <script>
+    (function () {
+      const token = localStorage.getItem("sentrykey_session_token");
+      if (!token) { window.location.href = "/login.html"; return; }
+      const H = { "X-Session-Token": token, "Content-Type": "application/json" };
+      const $ = (id) => document.getElementById(id);
+      const toast = $("toast-notification");
+      function showToast(msg, type) {
+        toast.textContent = msg; toast.className = "toast show";
+        if (type) toast.classList.add(type);
+        clearTimeout(toast._t); toast._t = setTimeout(() => toast.classList.remove("show"), 3000);
+      }
+      function fmtBytes(n) {
+        if (!n) return "0 KB";
+        if (n < 1024) return n + " B";
+        if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+        return (n / 1048576).toFixed(2) + " MB";
+      }
+
+      async function load() {
+        const sres = await fetch("/api/admin/stats", { headers: H });
+        if (sres.status === 401) { window.location.href = "/login.html"; return; }
+        if (sres.status === 403) { $("denied").style.display = "block"; return; }
+        const stats = await sres.json();
+        const ures = await fetch("/api/admin/users", { headers: H });
+        const { users, plans } = await ures.json();
+
+        $("admin-content").style.display = "block";
+
+        const planLines = Object.entries(stats.planCounts || {}).map(([p, c]) => `${c} ${p}`).join(" · ") || "—";
+        $("stat-grid").innerHTML =
+          `<div class="stat-card glass"><div class="num">${stats.users}</div><div class="lbl">Users</div></div>` +
+          `<div class="stat-card glass"><div class="num">${stats.totalBackups}</div><div class="lbl">Backups</div></div>` +
+          `<div class="stat-card glass"><div class="num">${fmtBytes(stats.totalBytes)}</div><div class="lbl">Storage</div></div>` +
+          `<div class="stat-card glass"><div class="num" style="font-size:17px;">${planLines}</div><div class="lbl">Plans</div></div>`;
+
+        const tbody = $("users-tbody");
+        tbody.innerHTML = "";
+        users.forEach((u) => {
+          const tr = document.createElement("tr");
+          const opts = plans.map((p) => `<option value="${p}" ${p === u.plan ? "selected" : ""}>${p}</option>`).join("");
+          tr.innerHTML =
+            `<td><strong>${u.username}</strong></td>` +
+            `<td><select class="plan-select" data-user="${u.username}">${opts}</select></td>` +
+            `<td>${u.backups.count}</td>` +
+            `<td>${fmtBytes(u.backups.bytes)}</td>` +
+            `<td>${u.hasRecovery ? "✓" : "—"}</td>` +
+            `<td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>`;
+          tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll(".plan-select").forEach((sel) => {
+          sel.addEventListener("change", async (e) => {
+            const user = e.target.dataset.user, plan = e.target.value;
+            try {
+              const r = await fetch(`/api/admin/users/${encodeURIComponent(user)}/plan`, { method: "POST", headers: H, body: JSON.stringify({ plan }) });
+              if (!r.ok) throw new Error(((await r.json()) || {}).error || "failed");
+              showToast(`${user} → ${plan}`, "success");
+            } catch (err) {
+              showToast(err.message || "Update failed", "error");
+            }
+          });
+        });
+      }
+      load().catch(() => showToast("Failed to load admin data", "error"));
+    })();
+  </script>
+</body>
+</html>

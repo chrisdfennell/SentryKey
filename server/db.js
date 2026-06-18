@@ -49,6 +49,7 @@ function createStore(dbDir) {
                              ON CONFLICT(username) DO UPDATE SET data = excluded.data`),
     delUser:     db.prepare('DELETE FROM users WHERE username = ?'),
     countUsers:  db.prepare('SELECT COUNT(*) AS n FROM users'),
+    allUsers:    db.prepare('SELECT username, data FROM users'),
     getSession:  db.prepare('SELECT username, created_at FROM sessions WHERE token = ?'),
     putSession:  db.prepare(`INSERT INTO sessions (token, username, created_at) VALUES (?, ?, ?)
                              ON CONFLICT(token) DO UPDATE SET username = excluded.username, created_at = excluded.created_at`),
@@ -73,6 +74,10 @@ function createStore(dbDir) {
     },
     countUsers() {
       return q.countUsers.get().n;
+    },
+    /** All users with their parsed record — admin/metadata use only. */
+    allUsers() {
+      return q.allUsers.all().map((r) => ({ username: r.username, ...JSON.parse(r.data) }));
     },
 
     /** @returns {{username:string, createdAt:number}|null} */

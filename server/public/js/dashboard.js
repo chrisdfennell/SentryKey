@@ -519,6 +519,8 @@ document.addEventListener("DOMContentLoaded", () => {
         $("account-since").textContent = a.createdAt ? new Date(a.createdAt).toLocaleDateString() : "—";
         $("account-backups").textContent = `${a.backups?.count ?? 0}${a.backups?.max ? " / " + a.backups.max : ""}`;
         $("account-storage").textContent = fmtBytes(a.backups?.bytes ?? 0);
+        const adminLink = $("account-admin-link");
+        if (adminLink) adminLink.style.display = a.isAdmin ? "inline-flex" : "none";
       } catch (_) {
         $("account-plan-badge").textContent = "Free";
       }
