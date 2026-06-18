@@ -24,20 +24,31 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Decode Developer Key
+        id: key
+        env:
+          GARMIN_DEVELOPER_KEY: ${{ secrets.GARMIN_DEVELOPER_KEY }}
         run: |
-          if [ -z "${{ secrets.GARMIN_DEVELOPER_KEY }}" ]; then
-            echo "Error: GARMIN_DEVELOPER_KEY secret is not set!" >&2
-            exit 1
+          # Dependabot and forked-PR runs don't receive repo secrets, so the key
+          # is empty there. Skip the Garmin compile gracefully instead of failing
+          # (the Android job still validates dependency bumps); real pushes and
+          # tags have the secret and build normally.
+          if [ -z "$GARMIN_DEVELOPER_KEY" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GARMIN_DEVELOPER_KEY not available (Dependabot or fork PR) — skipping Garmin compile."
+          else
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+            echo "$GARMIN_DEVELOPER_KEY" | base64 -d > developer_key.der
           fi
-          echo "${{ secrets.GARMIN_DEVELOPER_KEY }}" | base64 -d > developer_key.der
 
       # manifest.xml lists every supported watch (source of truth). Trim it to the
       # devices THIS build image's SDK actually has, so an older CI SDK still builds
       # the subset it knows. A local/newer SDK (and the store .iq) builds them all.
       - name: Filter manifest to SDK-supported devices
+        if: steps.key.outputs.has_key == 'true'
         run: sh ci/filter-devices.sh
 
       - name: Compile Garmin App
+        if: steps.key.outputs.has_key == 'true'
         run: |
           mkdir -p bin
           
@@ -74,6 +85,7 @@ jobs:
             -d fenix8solar51mm
 
       - name: Upload Garmin Artifacts
+        if: steps.key.outputs.has_key == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sentrykey-garmin-build
