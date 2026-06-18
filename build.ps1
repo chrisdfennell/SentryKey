@@ -1,7 +1,8 @@
 param(
     [string]$Device = "fenix8solar51mm",
     [switch]$Run,
-    [switch]$Export
+    [switch]$Export,
+    [switch]$Test
 )
 
 # Load local build configuration or create default if missing
@@ -37,7 +38,11 @@ $monkeyc = Join-Path $sdkBin "monkeyc.bat"
 $junglePath = Join-Path $PSScriptRoot "monkey.jungle"
 $keyPath = Join-Path $PSScriptRoot "developer_key.der"
 
-if ($Export) {
+if ($Test) {
+    Write-Host "Building unit-test binary for device: $Device..." -ForegroundColor Cyan
+    $outputPath = Join-Path $PSScriptRoot "bin\SentryKeyTest.prg"
+    & $monkeyc -f $junglePath -o $outputPath -y $keyPath -d $Device --unit-test
+} elseif ($Export) {
     Write-Host "Packaging application for Connect IQ Store (.iq)..." -ForegroundColor Cyan
     $outputPath = Join-Path $PSScriptRoot "bin\SentryKey.iq"
     & $monkeyc -e -f $junglePath -o $outputPath -y $keyPath
@@ -49,6 +54,19 @@ if ($Export) {
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Compilation failed with exit code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}
+
+# Unit tests: launch the test binary in the simulator with the test runner.
+if ($Test) {
+    Write-Host "Unit-test build succeeded. Launching tests in the simulator..." -ForegroundColor Cyan
+    $simProcess = Get-Process -Name "simulator" -ErrorAction SilentlyContinue
+    if (!$simProcess) {
+        Start-Process -FilePath (Join-Path $sdkBin "simulator.exe")
+        Start-Sleep -Seconds 8
+    }
+    $monkeydo = Join-Path $sdkBin "monkeydo.bat"
+    & $monkeydo $outputPath $Device /t
     exit $LASTEXITCODE
 }
 

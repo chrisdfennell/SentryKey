@@ -118,6 +118,19 @@ jobs:
             -o bin/SentryKey_fenix8solar51mm.prg \
             -d fenix8solar51mm
 
+      # Compile the unit-test build so CryptoTests.mc can't silently rot. The
+      # tests are *executed* locally in the simulator (./build.ps1 -Test); the
+      # CIQ sim isn't headless-friendly enough to run them reliably in CI.
+      - name: Compile Garmin unit-test build
+        if: steps.key.outputs.has_key == 'true'
+        run: |
+          java -jar /connectiq/bin/monkeybrains.jar \
+            -f monkey.jungle \
+            -y developer_key.der \
+            -o bin/SentryKeyTest.prg \
+            -d fenix843mm \
+            --unit-test
+
       - name: Upload Garmin Artifacts
         if: steps.key.outputs.has_key == 'true'
         uses: actions/upload-artifact@v4
