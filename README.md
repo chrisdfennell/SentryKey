@@ -21,12 +21,15 @@
 
 I'm looking for testers for the **SentryKey Android app** — now in **closed beta on Google Play**. It's free; try it out, kick the tires, and tell me what breaks or feels confusing.
 
-**Join the beta (pick either):**
+**Become a tester — 3 quick steps:**
 
-- 🌐 **On the web:** **[play.google.com/apps/testing/com.fennell.sentrykey](https://play.google.com/apps/testing/com.fennell.sentrykey)**
-- 🤖 **On your Android phone:** **[play.google.com/store/apps/details?id=com.fennell.sentrykey](https://play.google.com/store/apps/details?id=com.fennell.sentrykey)**
+1. **Join the testers group:** **[groups.google.com/g/sentrykey-testers](https://groups.google.com/g/sentrykey-testers)** → click **Join group**
+2. **Opt in on Google Play:** **[play.google.com/apps/testing/com.fennell.sentrykey](https://play.google.com/apps/testing/com.fennell.sentrykey)** → tap **Become a tester**
+3. **Install** SentryKey from the Play Store and give it a spin 🙌
 
-Opt in through either link, then install (or update) from the Play Store. Hit a bug or have feedback? **[Open an issue](https://github.com/chrisdfennell/SentryKey/issues)** — it genuinely helps. 🙏
+> ⚠️ Do **both** steps 1 and 2 — joining the group alone doesn't opt you in, and the Play opt-in only works once you're a group member.
+
+Hit a bug or have feedback? **[Open an issue](https://github.com/chrisdfennell/SentryKey/issues)** — it genuinely helps. 🙏
 
 > Prefer to sideload? Grab the APK from the [latest release](https://github.com/chrisdfennell/SentryKey/releases/latest).
 
