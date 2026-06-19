@@ -5,8 +5,8 @@ and the **prep checklist** for each.
 
 - **Android applicationId:** `com.fennell.sentrykey`
 - **iOS bundle ID (planned):** `com.fennell.sentrykey` (set when the Xcode project is created)
-- **Privacy policy (live):** <https://chrisdfennell.github.io/SentryKey/>
-  (served from [`site/index.html`](site/index.html) via GitHub Pages; source content in [PRIVACY.md](PRIVACY.md))
+- **Privacy policy (live):** <https://sentrykey.app/privacy.html>
+  (served from [`server/public/privacy.html`](server/public/privacy.html); source content in [PRIVACY.md](PRIVACY.md))
 
 ---
 
@@ -45,7 +45,7 @@ YOUR PRIVACY
 
 SentryKey does not collect, transmit, or sell any data. There are no accounts, no servers, and no tracking — everything stays on your devices. The only transmission is the direct Bluetooth sync between your phone and your own paired Garmin watch. Your 2FA secrets are never sent to us or any third party.
 
-Full privacy policy: https://chrisdfennell.github.io/SentryKey/
+Full privacy policy: https://sentrykey.app/privacy.html
 
 SUPPORTED WATCHES
 
@@ -139,7 +139,7 @@ YOUR PRIVACY
 
 SentryKey does not collect, transmit, or sell any data. There are no accounts, no servers, and no tracking — everything stays on your devices. The only transmission is the direct Bluetooth sync between your phone and your own paired Garmin watch. Your 2FA secrets are never sent to us or any third party.
 
-Full privacy policy: https://chrisdfennell.github.io/SentryKey/
+Full privacy policy: https://sentrykey.app/privacy.html
 
 SUPPORTED WATCHES
 
