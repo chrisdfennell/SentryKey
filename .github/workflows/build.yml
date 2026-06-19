@@ -320,7 +320,7 @@ jobs:
 
       - name: Download AAB artifact
         if: steps.creds.outputs.ready == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sentrykey-play-release-aab
           path: play-aab/
@@ -347,13 +347,13 @@ jobs:
 
     steps:
       - name: Download Garmin Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sentrykey-garmin-build
           path: garmin-build/
 
       - name: Download Android Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sentrykey-companion-apk
           path: android-build/
