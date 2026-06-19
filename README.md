@@ -186,6 +186,17 @@ git push origin v1.0.0-beta.x
 - [ ] Issuer-only label display option on the watch
 - [ ] iOS TestFlight distribution
 
+## ❤️ Support
+
+SentryKey is **free forever** — no paid tiers, no subscriptions, no ads. If it's
+useful to you, a donation funds new features and keeps the managed cloud at
+[sentrykey.app](https://sentrykey.app) running:
+
+- 💖 [GitHub Sponsors](https://github.com/sponsors/chrisdfennell)
+- ☕ [Ko-fi](https://ko-fi.com/chrisdfennell)
+
+Not a donor? Starring the repo and filing good bug reports helps just as much.
+
 ---
 
 <div align="center">
