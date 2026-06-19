@@ -20,14 +20,17 @@ updates:
       - "android"
     commit-message:
       prefix: "build(deps)"
-    # androidx.core 1.19.0+ requires compileSdk 37 (Android 17, preview) — too new
-    # for a Play-published app. Hold it back until we deliberately move to SDK 37;
-    # without this the whole gradle-minor-patch group PR fails the Android build.
+    # The androidx mid-2026 wave (core 1.19.0, lifecycle 2.11.0, …) requires
+    # compileSdk 37 (Android 17, preview) — too new for a Play-published app, and
+    # one such dep fails the AAR-metadata check for the WHOLE gradle-minor-patch
+    # group PR. Hold these back until we deliberately move to SDK 37.
     ignore:
       - dependency-name: "androidx.core:core"
         versions: [">=1.19.0"]
       - dependency-name: "androidx.core:core-ktx"
         versions: [">=1.19.0"]
+      - dependency-name: "androidx.lifecycle:*"
+        versions: [">=2.11.0"]
     # Roll routine minor/patch bumps into a single PR to cut review noise;
     # major bumps stay as their own PRs so breaking changes get attention.
     groups:
