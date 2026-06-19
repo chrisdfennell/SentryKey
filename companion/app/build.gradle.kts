@@ -117,7 +117,7 @@ dependencies {
     "playImplementation"("com.google.android.play:app-update-ktx:2.1.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.biometric:biometric:1.1.0")
-    implementation("sh.calvin.reorderable:reorderable:2.4.3")
+    implementation("sh.calvin.reorderable:reorderable:3.1.0")
     implementation(libs.play.services.code.scanner)
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
