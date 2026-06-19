@@ -1,14 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
-const INVITE = 'e2e-invite';
-
 async function registerAndOpen(page, username, password) {
   await page.goto('/login.html');
   await page.click('#tab-signup');
   await page.fill('#username', username);
   await page.fill('#password', password);
-  await page.locator('#invite-code').waitFor({ state: 'visible' });
-  await page.fill('#invite-code', INVITE);
   await page.click('#btn-auth-submit');
   await page.waitForURL('**/dashboard.html');
   await expect(page.locator('#sidebar-user-display')).toContainText(username.toUpperCase());
@@ -47,8 +43,6 @@ test('register, add an account, and it survives a reload (cloud round-trip)', as
   await page.click('#tab-signup');
   await page.fill('#username', username);
   await page.fill('#password', password);
-  await page.locator('#invite-code').waitFor({ state: 'visible' });
-  await page.fill('#invite-code', INVITE);
   await page.click('#btn-auth-submit');
 
   // --- Auto-login redirects to the dashboard ---
@@ -93,8 +87,6 @@ test('uploaded backup is ciphertext only (no plaintext secret leaks)', async ({ 
   await page.click('#tab-signup');
   await page.fill('#username', username);
   await page.fill('#password', password);
-  await page.locator('#invite-code').waitFor({ state: 'visible' });
-  await page.fill('#invite-code', INVITE);
   await page.click('#btn-auth-submit');
   await page.waitForURL('**/dashboard.html');
 

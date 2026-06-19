@@ -61,7 +61,6 @@ fun CloudBackupDialog(
     var serverUrl by remember { mutableStateOf(vaultStorage.getCloudServerUrl()) }
     var username by remember { mutableStateOf(vaultStorage.getCloudUsername()) }
     var password by remember { mutableStateOf("") }
-    var inviteCode by remember { mutableStateOf("") }
     var isRegister by remember { mutableStateOf(false) }
 
     var busy by remember { mutableStateOf(false) }
@@ -100,7 +99,7 @@ fun CloudBackupDialog(
             try {
                 val keys = withContext(Dispatchers.Default) { CloudCrypto.deriveUserKeys(username, password) }
                 if (isRegister) {
-                    CloudBackupClient.register(serverUrl, username, keys.authKey, inviteCode)
+                    CloudBackupClient.register(serverUrl, username, keys.authKey)
                 }
                 val tok = CloudBackupClient.login(serverUrl, username, keys.authKey)
                 token = tok
@@ -182,9 +181,6 @@ fun CloudBackupDialog(
                 CloudField("Username", username, enabled = !connected && !busy) { username = it }
                 if (!connected) {
                     CloudField("Master password", password, isPassword = true, enabled = !busy) { password = it }
-                    if (isRegister) {
-                        CloudField("Invite code (if required)", inviteCode, enabled = !busy) { inviteCode = it }
-                    }
                 }
 
                 if (!connected) {

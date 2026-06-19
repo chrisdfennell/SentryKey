@@ -4,7 +4,7 @@
 #
 # Deploy:
 #   1) point sentrykey.app DNS (A/AAAA) at this host; open ports 80 + 443
-#   2) cp .env.example .env  &&  edit SERVER_ACCESS_PASSPHRASE
+#   2) cp .env.example .env  &&  edit as needed
 #   3) docker compose up -d --build
 services:
   app:
@@ -15,10 +15,14 @@ services:
       PORT: "3000"
       NODE_ENV: production
       MAX_BACKUPS_RETAINED: "15"
-      # From .env (see .env.example). If set, registration requires it as an invite code.
-      SERVER_ACCESS_PASSPHRASE: "${SERVER_ACCESS_PASSPHRASE:-}"
       # Comma-separated admin usernames that unlock /admin.html. Empty = no admins.
       ADMIN_USERS: "${ADMIN_USERS:-}"
+      # Optional bot protection (reCAPTCHA v3 + native app-key bypass). See .env.example.
+      # Empty RECAPTCHA_SECRET = disabled.
+      RECAPTCHA_SITE_KEY: "${RECAPTCHA_SITE_KEY:-}"
+      RECAPTCHA_SECRET: "${RECAPTCHA_SECRET:-}"
+      RECAPTCHA_MIN_SCORE: "${RECAPTCHA_MIN_SCORE:-0.5}"
+      APP_API_KEY: "${APP_API_KEY:-}"
       # Optional recovery email/SMS (see .env.example). Empty = disabled.
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-}"

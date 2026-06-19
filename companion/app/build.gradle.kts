@@ -32,6 +32,15 @@ android {
         val releaseTag = System.getenv("GITHUB_REF_NAME") ?: "dev"
         buildConfigField("String", "RELEASE_TAG", "\"$releaseTag\"")
 
+        // Shared key that lets the app bypass the server's reCAPTCHA gate (the phone
+        // app can't run reCAPTCHA). Must match the server's APP_API_KEY. Supplied via
+        // env (CI secret) or a gradle property; empty for local builds, which means
+        // the header is simply omitted. Never hard-code the real key in the repo.
+        val appApiKey = System.getenv("APP_API_KEY")
+            ?: (project.findProperty("APP_API_KEY") as String?)
+            ?: ""
+        buildConfigField("String", "APP_API_KEY", "\"$appApiKey\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

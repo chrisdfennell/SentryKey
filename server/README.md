@@ -24,7 +24,7 @@ scp -r ./server user@your-vps-ip:/opt/sentrykey
 # on the VPS:
 cd /opt/sentrykey
 cp .env.example .env
-nano .env                      # set a strong SERVER_ACCESS_PASSPHRASE
+nano .env                      # optional: admin users, recovery email/SMS
 docker compose up -d --build
 ```
 
@@ -62,11 +62,22 @@ cp .env.template .env # or write a new one
 nano .env
 ```
 
-Ensure you configure a strong **Server Access Passphrase** to prevent public unauthorized access:
+Registration is open to everyone; the defaults work out of the box. Adjust only if needed:
 ```env
 PORT=3000
-SERVER_ACCESS_PASSPHRASE=use_a_very_strong_random_password_here
 MAX_BACKUPS_RETAINED=15
+```
+
+**Optional — bot protection (reCAPTCHA v3).** To stop bot signups on a public
+server, set reCAPTCHA keys (from <https://www.google.com/recaptcha/admin>). The
+phone apps can't run reCAPTCHA, so they pass a shared `APP_API_KEY` header instead
+(bake the same value into the app builds). Leave `RECAPTCHA_SECRET` blank to keep
+verification off. See [`.env.example`](.env.example) for all four variables.
+```env
+RECAPTCHA_SITE_KEY=your_v3_site_key
+RECAPTCHA_SECRET=your_v3_secret_key
+RECAPTCHA_MIN_SCORE=0.5
+APP_API_KEY=long_random_value_matching_the_app_builds
 ```
 
 ---
@@ -107,7 +118,6 @@ If you prefer standard Linux system services:
    ExecStart=/usr/bin/node server.js
    Restart=on-failure
    Environment=PORT=3000
-   Environment=SERVER_ACCESS_PASSPHRASE=your_vps_passphrase_here
 
    [Install]
    WantedBy=multi-user.target
@@ -129,7 +139,6 @@ docker build -t sentrykey-vault .
 docker run -d \
   -p 3000:3000 \
   -v /var/sentrykey/backups:/usr/src/app/backups \
-  -e SERVER_ACCESS_PASSPHRASE=your_vps_passphrase_here \
   --name sentrykey-vault \
   --restart unless-stopped \
   sentrykey-vault
@@ -186,7 +195,7 @@ Since SentryKey deals with 2FA metadata, **HTTPS is strictly required** for the 
 ## 📲 How to Backup your companion app
 1. Export a **Passphrase-locked Backup** from SentryKey Android (`.skbackup` file) or copy the encrypted string from SentryKey iOS.
 2. Open your SentryKey VPS domain in your browser.
-3. Authenticate with your **Server Access Passphrase**.
+3. Create an account (or sign in) with your **username** and **master password**.
 4. In the Sync Bar, click **Load Local Backup** and select your `.skbackup` file.
 5. Enter your **Backup Passphrase** to decrypt and view/manage your vault.
 6. Click **Sync to Cloud** to store this backup on your VPS. It will now be saved on disk and listable in the dropdown, allowing you to access it, edit it, and sync it back from any device.

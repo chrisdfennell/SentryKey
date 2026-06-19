@@ -6,10 +6,10 @@ enum CloudSync {
 
     /// Derives keys, registers if [isRegister], logs in, and persists the session.
     @MainActor
-    static func signIn(url: String, username: String, password: String, isRegister: Bool, invite: String) async throws {
+    static func signIn(url: String, username: String, password: String, isRegister: Bool) async throws {
         let keys = CloudCrypto.deriveUserKeys(username: username, password: password)
         if isRegister {
-            try await CloudBackupClient.register(baseURL: url, username: username, authKey: keys.authKey, inviteCode: invite)
+            try await CloudBackupClient.register(baseURL: url, username: username, authKey: keys.authKey)
         }
         let token = try await CloudBackupClient.login(baseURL: url, username: username, authKey: keys.authKey)
         CloudStore.shared.saveSession(url: url, username: username, token: token, encKey: keys.encKey)

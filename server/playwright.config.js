@@ -2,8 +2,8 @@ const path = require('path');
 const os = require('os');
 const { defineConfig } = require('@playwright/test');
 
-// Each run gets fresh temp data dirs so there are no leftover users/vaults, and
-// a known invite passphrase so registration is deterministic regardless of .env.
+// Each run gets fresh temp data dirs so there are no leftover users/vaults.
+// Registration is open to everyone — no invite gate.
 const stamp = String(Date.now());
 const PORT = 31100;
 const DB_DIR = path.join(os.tmpdir(), 'sk-e2e-db-' + stamp);
@@ -29,7 +29,6 @@ module.exports = defineConfig({
       PORT: String(PORT),
       DB_DIR,
       BACKUPS_DIR,
-      SERVER_ACCESS_PASSPHRASE: 'e2e-invite',
     },
   },
 });

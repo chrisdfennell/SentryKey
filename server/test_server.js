@@ -2,8 +2,8 @@
 //
 // Spawns the REAL server (server.js) against throwaway temp DB/backup dirs and
 // exercises the full API surface, then verifies the one-time users.json -> SQLite
-// migration. No external services needed (SERVER_ACCESS_PASSPHRASE left unset, so
-// no invite gate; recovery uses no email/SMS provider, so no OTP).
+// migration. No external services needed (registration is open to everyone;
+// recovery uses no email/SMS provider, so no OTP).
 //
 //   node test_server.js     (exit 0 = all pass)
 
@@ -21,12 +21,8 @@ function check(name, cond) {
 
 const mkTmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 
-const INVITE = 'test-invite-code';
-function startServer({ port, dbDir, backupsDir }) {
-  // Set a known passphrase in the child env. dotenv.config() does NOT override
-  // already-set vars, so this wins over any server/.env and keeps the test
-  // deterministic; register calls pass it as the invite code.
-  const env = { ...process.env, PORT: String(port), DB_DIR: dbDir, BACKUPS_DIR: backupsDir, SERVER_ACCESS_PASSPHRASE: INVITE, ADMIN_USERS: 'adminuser' };
+function startServer({ port, dbDir, backupsDir, extraEnv }) {
+  const env = { ...process.env, PORT: String(port), DB_DIR: dbDir, BACKUPS_DIR: backupsDir, ADMIN_USERS: 'adminuser', ...(extraEnv || {}) };
   // stderr is inherited (not piped) to avoid a libuv handle-close assertion on
   // Windows when the child is killed.
   return spawn(process.execPath, ['server.js'], { cwd: __dirname, env, stdio: ['ignore', 'ignore', 'inherit'] });
@@ -67,8 +63,8 @@ async function phaseFresh() {
     await waitReady(base);
     const u = 'alice', k1 = 'authkey-one-1234567890';
 
-    check('register -> 201', (await jpost(base, '/api/auth/register', { username: u, authKey: k1, inviteCode: INVITE })).status === 201);
-    check('duplicate register -> 409', (await jpost(base, '/api/auth/register', { username: u, authKey: k1, inviteCode: INVITE })).status === 409);
+    check('register -> 201', (await jpost(base, '/api/auth/register', { username: u, authKey: k1 })).status === 201);
+    check('duplicate register -> 409', (await jpost(base, '/api/auth/register', { username: u, authKey: k1 })).status === 409);
     check('login wrong key -> 401', (await jpost(base, '/api/auth/login', { username: u, authKey: 'nope' })).status === 401);
 
     const login = await jpost(base, '/api/auth/login', { username: u, authKey: k1 });
@@ -132,8 +128,8 @@ async function phaseAdmin() {
   try {
     await waitReady(base);
     const adminK = 'admin-authkey', userK = 'user-authkey';
-    await jpost(base, '/api/auth/register', { username: 'adminuser', authKey: adminK, inviteCode: INVITE });
-    await jpost(base, '/api/auth/register', { username: 'normaluser', authKey: userK, inviteCode: INVITE });
+    await jpost(base, '/api/auth/register', { username: 'adminuser', authKey: adminK });
+    await jpost(base, '/api/auth/register', { username: 'normaluser', authKey: userK });
     const adminAuth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'adminuser', authKey: adminK })).body?.token };
     const userAuth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'normaluser', authKey: userK })).body?.token };
 
@@ -158,7 +154,7 @@ async function phaseAdmin() {
     await jpost(base, '/api/admin/users/normaluser/revoke-sessions', {}, adminAuth);
     check('revoked session token is rejected (401)', (await jget(base, '/api/account', { 'x-session-token': freshTok })).status === 401);
 
-    await jpost(base, '/api/auth/register', { username: 'tempuser', authKey: 'temp-k', inviteCode: INVITE });
+    await jpost(base, '/api/auth/register', { username: 'tempuser', authKey: 'temp-k' });
     check('admin deletes account', (await jdel(base, '/api/admin/users/tempuser', adminAuth)).status === 200);
     check('deleted user cannot log in (401)', (await jpost(base, '/api/auth/login', { username: 'tempuser', authKey: 'temp-k' })).status === 401);
     check('admin cannot delete self (400)', (await jdel(base, '/api/admin/users/adminuser', adminAuth)).status === 400);
@@ -174,7 +170,7 @@ async function phaseSync() {
   try {
     await waitReady(base);
     const k = 'sync-authkey';
-    await jpost(base, '/api/auth/register', { username: 'syncuser', authKey: k, inviteCode: INVITE });
+    await jpost(base, '/api/auth/register', { username: 'syncuser', authKey: k });
     const auth = { 'x-session-token': (await jpost(base, '/api/auth/login', { username: 'syncuser', authKey: k })).body?.token };
     const upload = (baseRev) => jpost(base, '/api/backups/upload', sampleVault(),
       baseRev === undefined ? auth : { ...auth, 'x-base-rev': String(baseRev) });
@@ -194,11 +190,39 @@ async function phaseSync() {
   }
 }
 
+async function phaseBotProtection() {
+  console.log('\n--- Phase E: bot protection (reCAPTCHA gate + app-key bypass) ---');
+  const port = 38215, dbDir = mkTmp('skdb5-'), backupsDir = mkTmp('skbk5-'), base = `http://127.0.0.1:${port}`;
+  const APP_KEY = 'test-app-key-123';
+  // RECAPTCHA_SECRET set -> the verifyHuman gate is active. We never reach Google:
+  // the missing-credential path 403s before the network call, and the app-key path
+  // bypasses it — so the test stays deterministic and offline.
+  const srv = startServer({ port, dbDir, backupsDir, extraEnv: {
+    RECAPTCHA_SECRET: 'test-secret', RECAPTCHA_SITE_KEY: 'test-site-key', APP_API_KEY: APP_KEY
+  } });
+  const appAuth = { 'X-SentryKey-App-Key': APP_KEY };
+  try {
+    await waitReady(base);
+    check('config exposes site key', (await jget(base, '/api/auth/config')).body?.recaptchaSiteKey === 'test-site-key');
+    check('register without captcha/app-key -> 403',
+      (await jpost(base, '/api/auth/register', { username: 'botuser', authKey: 'k-123456789' })).status === 403);
+    check('register with app-key header -> 201',
+      (await jpost(base, '/api/auth/register', { username: 'appuser', authKey: 'k-123456789' }, appAuth)).status === 201);
+    check('login without app-key -> 403',
+      (await jpost(base, '/api/auth/login', { username: 'appuser', authKey: 'k-123456789' })).status === 403);
+    check('login with app-key header -> 200',
+      (await jpost(base, '/api/auth/login', { username: 'appuser', authKey: 'k-123456789' }, appAuth)).status === 200);
+  } finally {
+    srv.kill();
+  }
+}
+
 (async () => {
   await phaseFresh();
   await phaseMigration();
   await phaseAdmin();
   await phaseSync();
+  await phaseBotProtection();
   console.log(`\n${failures === 0 ? 'ALL PASS ✅' : failures + ' FAILURE(S) ❌'}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -121,12 +121,6 @@
           <input type="password" id="password" class="input-field" placeholder="Master Password" required autocomplete="current-password" />
         </div>
 
-        <!-- Invite code shown only when registering and server-restricted -->
-        <div class="form-group" id="invite-code-container" style="display: none;">
-          <label for="invite-code">Server Access Passphrase / Invite Code</label>
-          <input type="password" id="invite-code" class="input-field" placeholder="Invite Passphrase" />
-        </div>
-
         <button type="submit" class="btn btn-primary" style="width: 100%;" id="btn-auth-submit">Sign In</button>
       </form>
 
@@ -189,13 +183,38 @@
 
   <!-- Scripts -->
   <script src="/js/crypto.js"></script>
+  <!-- Bot protection (reCAPTCHA v3). The server reports the site key (or null when
+       disabled). When enabled we load Google's script and expose getCaptchaToken(),
+       which the auth + recovery flows call before each protected request. -->
+  <script>
+    window.__recaptchaSiteKey = null;
+    window.getCaptchaToken = async function (action) {
+      const key = window.__recaptchaSiteKey;
+      if (!key || !window.grecaptcha) return "";
+      try {
+        await new Promise((resolve) => grecaptcha.ready(resolve));
+        return await grecaptcha.execute(key, { action });
+      } catch (_) {
+        return ""; // never block the user if Google's script hiccups
+      }
+    };
+    fetch("/api/auth/config")
+      .then((res) => res.json())
+      .then((cfg) => {
+        if (!cfg || !cfg.recaptchaSiteKey) return;
+        window.__recaptchaSiteKey = cfg.recaptchaSiteKey;
+        const s = document.createElement("script");
+        s.src = "https://www.google.com/recaptcha/api.js?render=" + encodeURIComponent(cfg.recaptchaSiteKey);
+        document.head.appendChild(s);
+      })
+      .catch((err) => console.error("Failed to load auth config:", err));
+  </script>
   <!-- NOTE: do NOT load dashboard.js here. It runs a session check on load and
        redirects to /login.html when no session exists, which on this page is an
        infinite reload loop. login.html has its own toast + auth logic below. -->
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       let activeTab = "signin"; // signin or signup
-      let isRestricted = false;
 
       const elTitle = document.getElementById("auth-title");
       const elDesc = document.getElementById("auth-desc");
@@ -204,8 +223,6 @@
       const elForm = document.getElementById("auth-form");
       const elUsername = document.getElementById("username");
       const elPassword = document.getElementById("password");
-      const elInviteContainer = document.getElementById("invite-code-container");
-      const elInviteCode = document.getElementById("invite-code");
       const elBtnSubmit = document.getElementById("btn-auth-submit");
       const elCryptoStatus = document.getElementById("crypto-derivation-status");
       const elToast = document.getElementById("toast-notification");
@@ -227,8 +244,6 @@
         elTitle.textContent = "Sign In";
         elDesc.textContent = "Access your private zero-knowledge backups";
         elBtnSubmit.textContent = "Sign In";
-        elInviteContainer.style.display = "none";
-        elInviteCode.required = false;
       });
 
       elTabSignUp.addEventListener("click", () => {
@@ -239,14 +254,6 @@
         elTitle.textContent = "Create Account";
         elDesc.textContent = "Derive private encryption keys locally and sign up";
         elBtnSubmit.textContent = "Register";
-        
-        if (isRestricted) {
-          elInviteContainer.style.display = "block";
-          elInviteCode.required = true;
-        } else {
-          elInviteContainer.style.display = "none";
-          elInviteCode.required = false;
-        }
       });
 
       elForm.addEventListener("submit", async (e) => {
@@ -284,7 +291,7 @@
               body: JSON.stringify({
                 username: user,
                 authKey: authKey,
-                inviteCode: elInviteCode.value.trim()
+                recaptchaToken: await window.getCaptchaToken("register")
               })
             });
 
@@ -303,7 +310,8 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               username: user,
-              authKey: authKey
+              authKey: authKey,
+              recaptchaToken: await window.getCaptchaToken("login")
             })
           });
 
@@ -330,22 +338,6 @@
           elBtnSubmit.disabled = false;
         }
       });
-
-      // Load server invitation settings in the BACKGROUND. This must run AFTER
-      // the submit/tab handlers are attached (and must not be awaited before
-      // them) — otherwise the form could submit natively before its handler is
-      // wired, which a form-filler extension turns into a page-reload loop.
-      fetch("/api/auth/config")
-        .then((res) => res.json())
-        .then((data) => {
-          isRestricted = !!data.registrationRestricted;
-          // If the user already switched to Register, reveal the invite field now.
-          if (activeTab === "signup" && isRestricted) {
-            elInviteContainer.style.display = "block";
-            elInviteCode.required = true;
-          }
-        })
-        .catch((err) => console.error("Failed to read server auth config:", err));
 
     });
   </script>
@@ -408,7 +400,7 @@
 
           // 1. Start — sends an OTP if a channel is configured for this account.
           if (!otpSent) {
-            const sres = await fetch("/api/recovery/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username }) });
+            const sres = await fetch("/api/recovery/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, recaptchaToken: await window.getCaptchaToken("recovery_start") }) });
             const sdata = await sres.json();
             if (!sres.ok) throw new Error(sdata.error || "No recovery is set up for this account.");
             otpSent = true;
@@ -461,7 +453,8 @@
             otp,
             newAuthKey: nk.authKey,
             newRecovery: { salt: SentryCrypto.bytesToBase64(newSalt), blob: newBlob, authKey: newRec.authKey },
-            vault: newVaultEnv
+            vault: newVaultEnv,
+            recaptchaToken: await window.getCaptchaToken("recovery_reset")
           }) });
           const rdata = await rres.json();
           if (!rres.ok) throw new Error(rdata.error || "Recovery failed.");

@@ -157,7 +157,6 @@
           `<div class="stat-card glass"><div class="num">${fmtBytes(totalBytes)}</div><div class="lbl">Storage</div></div>`;
         $("server-line").innerHTML =
           `Server <strong>v${s.version}</strong> · Node <strong>${s.node}</strong> · up <strong>${fmtUptime(s.uptimeSeconds)}</strong> · ` +
-          `registration <strong>${s.registrationRestricted ? "invite-only" : "open"}</strong> · ` +
           `SMS <strong>${s.smsEnabled ? "on" : "off"}</strong> · email <strong>${s.emailEnabled ? "on" : "off"}</strong>`;
 
         renderUsers();
