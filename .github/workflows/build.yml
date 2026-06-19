@@ -182,6 +182,10 @@ jobs:
           echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Build Android App
+        env:
+          # Bakes the shared app key into the build so the app can bypass the
+          # server's reCAPTCHA gate. Empty when the secret is unset (gate stays off).
+          APP_API_KEY: ${{ secrets.APP_API_KEY }}
         run: |
           cd companion
           chmod +x gradlew
@@ -281,6 +285,8 @@ jobs:
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          # Shared app key for the reCAPTCHA bypass (matches the server's APP_API_KEY).
+          APP_API_KEY: ${{ secrets.APP_API_KEY }}
         run: |
           cd companion
           chmod +x gradlew
