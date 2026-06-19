@@ -9,7 +9,13 @@ watch binaries and Android APK.
 
 ## [Unreleased]
 
+## [v1.2.3] - 2026-06-19
+
 ### Changed
+- **Open cloud registration.** Removed the invite-code / "Server Access Passphrase"
+  gate from the cloud server, web dashboard, and both phone apps — anyone can create
+  a cloud account. Self-hosters who want to limit abuse can enable reCAPTCHA instead
+  (see Added). The `SERVER_ACCESS_PASSPHRASE` env var is gone.
 - **SentryKey is free forever — donation-supported, no paid tiers.** Removed all
   paid-tier scaffolding added in v1.2.2: the `PLANS` map, the admin set-plan
   endpoint, and the plan UI in the dashboard and admin panel. Every account now
@@ -20,6 +26,12 @@ watch binaries and Android APK.
   compileSdk 37 / Android 17 preview) until we deliberately move to that SDK.
 
 ### Added
+- **Optional bot protection (reCAPTCHA v3).** The website's registration, login, and
+  account-recovery actions can be guarded by Google reCAPTCHA v3 — set
+  `RECAPTCHA_SECRET` to enable (off by default, so self-hosting stays frictionless),
+  with a configurable score floor (`RECAPTCHA_MIN_SCORE`). The native phone apps,
+  which can't run reCAPTCHA, authenticate with a shared `APP_API_KEY` header baked
+  into release builds. Disclosed in the privacy policy.
 - **Donations.** GitHub Sponsors + Ko-fi links on the landing page, the dashboard
   account panel, and the README; `.github/FUNDING.yml` adds a "Sponsor" button to
   the repository.

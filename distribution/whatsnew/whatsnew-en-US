@@ -1,8 +1,8 @@
 What's new in this update:
 
-- More reliable multi-device sync: editing your vault on two devices at once (e.g. your phone and the web) now merges safely instead of overwriting — a 2FA code is never lost.
-- Under-the-hood stability and testing improvements.
+- Simpler cloud sign-up: creating a SentryKey cloud account no longer needs an invite code.
+- Under-the-hood security and stability improvements.
 
-Still here from recent updates: home-screen widget, automatic encrypted cloud backup, biometric unlock, zero-knowledge account recovery, Wear OS app, and 100+ round Garmin watches.
+Still here from recent updates: conflict-safe multi-device sync, home-screen widget, automatic encrypted cloud backup, biometric unlock, zero-knowledge account recovery, Wear OS app, and 100+ round Garmin watches.
 
 Thanks for testing!
