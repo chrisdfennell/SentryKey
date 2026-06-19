@@ -77,9 +77,9 @@ test('register, add an account, and it survives a reload (cloud round-trip)', as
   await expect(page.locator('.account-card')).toHaveCount(1);
   await expect(page.locator('.account-card')).toContainText(/github/i);
 
-  // --- Account panel surfaces the plan + usage ---
+  // --- Account panel surfaces usage ---
   await page.click('#nav-account');
-  await expect(page.locator('#account-plan-badge')).toHaveText('Free');
+  await expect(page.locator('#account-username')).toContainText(username);
   await expect(page.locator('#account-backups')).toContainText('1');
 });
 

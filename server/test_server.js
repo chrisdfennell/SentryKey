@@ -84,7 +84,7 @@ async function phaseFresh() {
     check('download matches ciphertext', (await dl.json()).ciphertext === 'deadbeef');
 
     const account = await jget(base, '/api/account', auth);
-    check('account -> free plan + 1 backup', account.body?.plan === 'free' && account.body?.planLabel === 'Free' && account.body?.backups?.count === 1);
+    check('account -> 1 backup + retention max', account.body?.backups?.count === 1 && typeof account.body?.backups?.max === 'number');
 
     check('recovery setup -> channels []', (await jpost(base, '/api/recovery/setup', { salt: 'rs', blob: 'rb', authKey: 'rauth' }, auth)).body?.channels?.length === 0);
     check('recovery start -> otpRequired false', (await jpost(base, '/api/recovery/start', { username: u })).body?.otpRequired === false);
@@ -141,14 +141,9 @@ async function phaseAdmin() {
     check('admin can list users (2)', list.status === 200 && list.body?.users?.length === 2);
     check('non-admin -> 403 on admin list', (await jget(base, '/api/admin/users', userAuth)).status === 403);
 
-    const setp = await jpost(base, '/api/admin/users/normaluser/plan', { plan: 'pro' }, adminAuth);
-    check('admin sets plan -> pro', setp.status === 200 && setp.body?.plan === 'pro');
-
     const acct = await jget(base, '/api/account', userAuth);
-    check('user account reflects pro plan', acct.body?.plan === 'pro' && acct.body?.planLabel === 'Pro');
     check('isAdmin true for admin, false for user',
       (await jget(base, '/api/account', adminAuth)).body?.isAdmin === true && acct.body?.isAdmin === false);
-    check('unknown plan -> 400', (await jpost(base, '/api/admin/users/normaluser/plan', { plan: 'enterprise' }, adminAuth)).status === 400);
 
     const srvInfo = await jget(base, '/api/admin/server', adminAuth);
     check('server info: version + counts', !!srvInfo.body?.version && typeof srvInfo.body?.users === 'number' && typeof srvInfo.body?.sessions === 'number');

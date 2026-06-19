@@ -245,11 +245,16 @@
       </div>
       <div class="modal-body">
         <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Username</span><strong id="account-username">—</strong></div>
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Plan</span><span id="account-plan-badge" style="background:var(--orange-gradient); color:#07080B; font-weight:700; font-size:12px; padding:3px 12px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px;">Free</span></div>
         <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Member since</span><strong id="account-since">—</strong></div>
         <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--card-border); font-size:14px;"><span style="color:var(--text-secondary);">Cloud backups</span><strong id="account-backups">—</strong></div>
         <div style="display:flex; justify-content:space-between; padding:10px 0; font-size:14px;"><span style="color:var(--text-secondary);">Storage used</span><strong id="account-storage">—</strong></div>
-        <p style="color:var(--text-secondary); font-size:12px; margin-top:16px;">Self-hosting SentryKey is free forever. Managed paid cloud plans are coming.</p>
+        <div style="margin-top:18px; padding:14px; border:1px solid var(--card-border); border-radius:12px; text-align:center;">
+          <p style="margin:0 0 12px; font-size:13px; color:var(--text-secondary);">SentryKey is <strong style="color:var(--text-primary);">free forever</strong> — no paid tiers, no ads. If it's useful to you, a small donation keeps it going. ❤️</p>
+          <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+            <a href="https://github.com/sponsors/chrisdfennell" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:13px;">💖 GitHub Sponsors</a>
+            <a href="https://ko-fi.com/chrisdfennell" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:13px;">☕ Ko-fi</a>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="btn-account-close">Close</button>

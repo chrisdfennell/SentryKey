@@ -557,7 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   // ACCOUNT RECOVERY SETUP
   // ==========================================================================
-  // Account modal — plan + usage from /api/account.
+  // Account modal — usage from /api/account.
   const elNavAccount = $("nav-account");
   const elAccountModal = $("account-modal");
   if (elNavAccount && elAccountModal) {
@@ -570,13 +570,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!res.ok) throw new Error("fetch failed");
         const a = await res.json();
         $("account-username").textContent = a.username || username;
-        $("account-plan-badge").textContent = a.planLabel || "Free";
         $("account-since").textContent = a.createdAt ? new Date(a.createdAt).toLocaleDateString() : "—";
         $("account-backups").textContent = `${a.backups?.count ?? 0}${a.backups?.max ? " / " + a.backups.max : ""}`;
         $("account-storage").textContent = fmtBytes(a.backups?.bytes ?? 0);
-      } catch (_) {
-        $("account-plan-badge").textContent = "Free";
-      }
+      } catch (_) { /* leave fields as-is on fetch failure */ }
     });
   }
   function fmtBytes(n) {

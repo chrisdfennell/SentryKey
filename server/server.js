@@ -14,18 +14,13 @@ const PORT = process.env.PORT || 3000;
 const SERVER_ACCESS_PASSPHRASE = process.env.SERVER_ACCESS_PASSPHRASE;
 const MAX_BACKUPS_RETAINED = parseInt(process.env.MAX_BACKUPS_RETAINED || '15', 10);
 
-// Subscription tiers — groundwork for future paid cloud plans (no billing yet).
-// Everyone is "free" today; a user's plan is stored on their account record
-// (absent = free). "pro" simply retains more backups for now.
-const PLANS = {
-  free: { label: 'Free', maxBackups: MAX_BACKUPS_RETAINED },
-  pro:  { label: 'Pro',  maxBackups: 100 },
-};
-function planInfo(plan) { return PLANS[plan] || PLANS.free; }
+// SentryKey is free for everyone — there are no paid tiers. Every account gets
+// the same generous backup retention (MAX_BACKUPS_RETAINED). The project is
+// supported by donations (GitHub Sponsors + Ko-fi), not subscriptions.
 
 // Admins are normal zero-knowledge accounts whose username is listed in
 // ADMIN_USERS (.env, comma-separated). They can view account METADATA (usernames,
-// plans, usage) and set plans — never vault contents, which stay encrypted.
+// usage) and moderate (suspend/delete) — never vault contents, which stay encrypted.
 const ADMIN_USERS = (process.env.ADMIN_USERS || '')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 function isAdmin(username) { return ADMIN_USERS.includes(String(username || '').toLowerCase()); }
@@ -94,10 +89,9 @@ const pruneOldBackups = (username) => {
       })
       .sort((a, b) => b.mtime - a.mtime); // Newest first
 
-    // Retain count depends on the user's plan (free vs pro).
-    const maxBackups = planInfo((store.getUser(username) || {}).plan).maxBackups;
-    if (files.length > maxBackups) {
-      const toDelete = files.slice(maxBackups);
+    // Keep the most recent MAX_BACKUPS_RETAINED versions for every account.
+    if (files.length > MAX_BACKUPS_RETAINED) {
+      const toDelete = files.slice(MAX_BACKUPS_RETAINED);
       toDelete.forEach(file => {
         fs.unlinkSync(file.path);
         console.log(`Pruned old backup for [${username}]: ${file.name}`);
@@ -165,7 +159,6 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     store.putUser(cleanUsername, {
       salt,
       hash,
-      plan: 'free',
       vaultRev: 0,
       createdAt: Date.now()
     });
@@ -247,20 +240,16 @@ app.get('/api/auth/config', (req, res) => {
   res.json({ registrationRestricted: !!SERVER_ACCESS_PASSPHRASE });
 });
 
-// Authenticated account overview: plan, usage, and limits. Returns only counts
-// and sizes — never secret content — so it stays zero-knowledge.
+// Authenticated account overview: usage and limits. Returns only counts and
+// sizes — never secret content — so it stays zero-knowledge.
 app.get('/api/account', apiLimiter, authenticateSession, (req, res) => {
   const user = store.getUser(req.username) || {};
-  const plan = user.plan || 'free';
-  const info = planInfo(plan);
   const usage = backupUsage(req.username);
   res.json({
     username: req.username,
-    plan,
-    planLabel: info.label,
     isAdmin: isAdmin(req.username),
     createdAt: user.createdAt || null,
-    backups: { count: usage.count, bytes: usage.bytes, max: info.maxBackups },
+    backups: { count: usage.count, bytes: usage.bytes, max: MAX_BACKUPS_RETAINED },
   });
 });
 
@@ -270,7 +259,6 @@ app.get('/api/account', apiLimiter, authenticateSession, (req, res) => {
 app.get('/api/admin/users', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
   const users = store.allUsers().map((u) => ({
     username: u.username,
-    plan: u.plan || 'free',
     suspended: !!u.suspended,
     createdAt: u.createdAt || null,
     hasRecovery: !!u.recovery,
@@ -278,35 +266,19 @@ app.get('/api/admin/users', apiLimiter, authenticateSession, requireAdmin, (req,
     hasEmail: !!u.email,
     backups: backupUsage(u.username),
   })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  res.json({ users, plans: Object.keys(PLANS) });
+  res.json({ users });
 });
 
 // Server-wide totals.
 app.get('/api/admin/stats', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
   const users = store.allUsers();
-  const planCounts = {};
   let totalBackups = 0, totalBytes = 0;
   for (const u of users) {
-    const plan = u.plan || 'free';
-    planCounts[plan] = (planCounts[plan] || 0) + 1;
     const usage = backupUsage(u.username);
     totalBackups += usage.count;
     totalBytes += usage.bytes;
   }
-  res.json({ users: users.length, totalBackups, totalBytes, planCounts });
-});
-
-// Set a user's plan — the only way to grant "pro" until billing exists.
-app.post('/api/admin/users/:username/plan', apiLimiter, authenticateSession, requireAdmin, (req, res) => {
-  const target = String(req.params.username || '').trim().toLowerCase();
-  const plan = String(req.body.plan || '').trim().toLowerCase();
-  if (!PLANS[plan]) return res.status(400).json({ error: 'Unknown plan.' });
-  const user = store.getUser(target);
-  if (!user) return res.status(404).json({ error: 'User not found.' });
-  user.plan = plan;
-  store.putUser(target, user);
-  console.log(`Admin ${req.username} set ${target} -> ${plan}`);
-  res.json({ username: target, plan });
+  res.json({ users: users.length, totalBackups, totalBytes });
 });
 
 // Server info / health for operators.
@@ -318,7 +290,6 @@ app.get('/api/admin/server', apiLimiter, authenticateSession, requireAdmin, (req
     registrationRestricted: !!SERVER_ACCESS_PASSPHRASE,
     smsEnabled: notify.smsEnabled,
     emailEnabled: notify.emailEnabled,
-    plans: PLANS,
     users: store.countUsers(),
     sessions: store.countSessions(),
     admins: ADMIN_USERS,
