@@ -60,6 +60,6 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.wear.compose:compose-material:1.4.1")
     implementation("androidx.wear.compose:compose-foundation:1.4.1")
-    implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     testImplementation(libs.junit)
 }
