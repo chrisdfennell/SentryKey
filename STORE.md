@@ -193,20 +193,18 @@ Add your 2FA accounts in the free SentryKey companion app (Android or iPhone) by
 Requires the free SentryKey companion app to add and sync accounts. Not affiliated with or endorsed by Garmin.
 ```
 
-### Already in place
+### Status: LIVE on the Connect IQ Store
+- **Store URL:** <https://apps.garmin.com/apps/5b059618-6481-4a1e-a0f4-9acd1a2a4ac3>
 - [x] Persistent signing key, `.iq` packaging via `./build.ps1 -Export` and CI.
 - [x] CI publishes `bin/SentryKey.iq` + per-device `.prg` to GitHub Releases on `v*` tags.
-
-### Still to do
-- [ ] **Connect IQ developer account** (free) at the Connect IQ store dashboard.
-- [ ] Store listing: name, description (above), category, screenshots for each device.
-- [ ] Upload `bin/SentryKey.iq`, select supported devices, set as free.
-- [ ] Privacy policy URL (same as above).
+- [x] **Connect IQ developer account** + store listing published, set as free.
+- [x] Uploaded `bin/SentryKey.iq` with supported devices selected.
+- [x] Privacy policy URL set (same as above).
 
 ---
 
 ## Cross-cutting
-- [x] Privacy policy hosted on GitHub Pages and reused across all listings.
+- [x] Privacy policy hosted at sentrykey.app/privacy.html and reused across all listings.
 - [ ] Decide final consistent launcher/app icons across all three stores.
 - [ ] Capture screenshots: phone app (Android + iOS) and watch faces per device.
 - [ ] Because the app handles 2FA secrets, do a security pass before release

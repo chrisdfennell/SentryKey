@@ -1,5 +1,7 @@
 # Garmin Connect IQ Store — Listing
 
+> **LIVE:** <https://apps.garmin.com/apps/5b059618-6481-4a1e-a0f4-9acd1a2a4ac3>
+>
 > Connect IQ store fields are short. Targets below are conservative; if the portal
 > rejects, trim to fit. App name is the `manifest.xml` name; the rest is set in the
 > Connect IQ developer dashboard.

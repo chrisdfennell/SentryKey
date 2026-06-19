@@ -8,6 +8,7 @@
 
 [![Build](https://github.com/chrisdfennell/SentryKey/actions/workflows/build.yml/badge.svg)](https://github.com/chrisdfennell/SentryKey/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/chrisdfennell/SentryKey?include_prereleases&color=ff8800)](https://github.com/chrisdfennell/SentryKey/releases)
+[![Connect IQ Store](https://img.shields.io/badge/Garmin-Connect%20IQ%20Store-007cc3?logo=garmin&logoColor=white)](https://apps.garmin.com/apps/5b059618-6481-4a1e-a0f4-9acd1a2a4ac3)
 ![Platform](https://img.shields.io/badge/platform-Garmin%20%7C%20Android%20%7C%20iOS-ff8800)
 ![Monkey C](https://img.shields.io/badge/watch-Monkey%20C-orange)
 ![Kotlin](https://img.shields.io/badge/android-Kotlin%20%2B%20Compose-7F52FF)
