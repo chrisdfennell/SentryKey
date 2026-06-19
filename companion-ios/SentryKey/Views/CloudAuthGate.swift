@@ -26,7 +26,6 @@ struct CloudAuthScreen: View {
     @State private var serverURL = CloudStore.shared.serverURL
     @State private var username = CloudStore.shared.username
     @State private var password = ""
-    @State private var invite = ""
     @State private var isRegister = false
     @State private var busy = false
     @State private var error: String?
@@ -46,9 +45,6 @@ struct CloudAuthScreen: View {
                     field("Server URL", text: $serverURL)
                     field("Username", text: $username)
                     secureField("Master password", text: $password)
-                    if isRegister {
-                        field("Invite code (if required)", text: $invite)
-                    }
 
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
 
@@ -94,7 +90,7 @@ struct CloudAuthScreen: View {
         Task {
             do {
                 try await CloudSync.signIn(url: serverURL, username: username, password: password,
-                                           isRegister: isRegister, invite: invite)
+                                           isRegister: isRegister)
                 // CloudStore.isSignedIn flips -> the gate swaps to content.
             } catch {
                 await MainActor.run { self.error = error.localizedDescription }

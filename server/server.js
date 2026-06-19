@@ -11,8 +11,16 @@ const SERVER_VERSION = (() => { try { return require('./package.json').version; 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SERVER_ACCESS_PASSPHRASE = process.env.SERVER_ACCESS_PASSPHRASE;
 const MAX_BACKUPS_RETAINED = parseInt(process.env.MAX_BACKUPS_RETAINED || '15', 10);
+
+// Bot protection. reCAPTCHA v3 guards the public auth actions from the website;
+// the native phone apps (which can't run reCAPTCHA) prove themselves instead with
+// a shared APP_API_KEY header. All optional: if RECAPTCHA_SECRET is unset, human
+// verification is disabled entirely, which keeps self-hosting frictionless.
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET || '';
+const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
+const RECAPTCHA_MIN_SCORE = parseFloat(process.env.RECAPTCHA_MIN_SCORE || '0.5');
+const APP_API_KEY = process.env.APP_API_KEY || '';
 
 // SentryKey is free for everyone — there are no paid tiers. Every account gets
 // the same generous backup retention (MAX_BACKUPS_RETAINED). The project is
@@ -102,6 +110,42 @@ const pruneOldBackups = (username) => {
   }
 };
 
+// --- Bot protection ---
+// Gate the public auth actions behind reCAPTCHA v3 (web) OR a shared app key
+// (native phone apps, which can't run reCAPTCHA). No-op when RECAPTCHA_SECRET is
+// unset, so self-hosted servers keep open, frictionless registration by default.
+async function verifyHuman(req, res, next) {
+  if (!RECAPTCHA_SECRET) return next();
+
+  // Native apps bypass reCAPTCHA with the shared key baked into the build.
+  if (APP_API_KEY && req.get('X-SentryKey-App-Key') === APP_API_KEY) return next();
+
+  const token = req.body && req.body.recaptchaToken;
+  if (!token) {
+    return res.status(403).json({ error: 'Bot verification required. Please reload and try again.' });
+  }
+
+  try {
+    const params = new URLSearchParams({ secret: RECAPTCHA_SECRET, response: token });
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip;
+    if (ip) params.append('remoteip', ip);
+    const verify = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+    const result = await verify.json();
+    // v3 returns a 0.0–1.0 score; reject low-confidence (likely bot) requests.
+    if (!result.success || (typeof result.score === 'number' && result.score < RECAPTCHA_MIN_SCORE)) {
+      return res.status(403).json({ error: 'Bot verification failed. Please try again.' });
+    }
+    return next();
+  } catch (err) {
+    console.error('reCAPTCHA verify error:', err.message);
+    return res.status(502).json({ error: 'Could not verify with reCAPTCHA. Try again later.' });
+  }
+}
+
 // --- Authentication Middleware ---
 
 const authenticateSession = (req, res, next) => {
@@ -130,8 +174,8 @@ const authenticateSession = (req, res, next) => {
 // --- Authentication API Endpoints ---
 
 // Register User
-app.post('/api/auth/register', authLimiter, (req, res) => {
-  const { username, authKey, inviteCode } = req.body;
+app.post('/api/auth/register', authLimiter, verifyHuman, (req, res) => {
+  const { username, authKey } = req.body;
 
   if (!username || !authKey) {
     return res.status(400).json({ error: 'Username and Auth Key are required.' });
@@ -140,11 +184,6 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
   const cleanUsername = username.trim().toLowerCase();
   if (cleanUsername.length < 3 || !/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
     return res.status(400).json({ error: 'Invalid username: Must be at least 3 alphanumeric characters/underscores.' });
-  }
-
-  // If a global server passphrase is set, check it as an invite code
-  if (SERVER_ACCESS_PASSPHRASE && inviteCode !== SERVER_ACCESS_PASSPHRASE) {
-    return res.status(403).json({ error: 'Invalid invitation / server access passphrase.' });
   }
 
   if (store.getUser(cleanUsername)) {
@@ -178,7 +217,7 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
 });
 
 // Login User
-app.post('/api/auth/login', authLimiter, (req, res) => {
+app.post('/api/auth/login', authLimiter, verifyHuman, (req, res) => {
   const { username, authKey } = req.body;
 
   if (!username || !authKey) {
@@ -235,9 +274,10 @@ app.get('/api/ping', authenticateSession, (req, res) => {
   res.json({ status: 'ok', username: req.username, app: 'SentryKey Cloud Server' });
 });
 
-// Check if Server Access Passphrase is required for registration
+// Public client config: the reCAPTCHA site key the browser needs to fetch tokens
+// (null when bot protection is disabled). Also serves as a health/readiness probe.
 app.get('/api/auth/config', (req, res) => {
-  res.json({ registrationRestricted: !!SERVER_ACCESS_PASSPHRASE });
+  res.json({ recaptchaSiteKey: RECAPTCHA_SITE_KEY || null });
 });
 
 // Authenticated account overview: usage and limits. Returns only counts and
@@ -287,7 +327,6 @@ app.get('/api/admin/server', apiLimiter, authenticateSession, requireAdmin, (req
     version: SERVER_VERSION,
     node: process.version,
     uptimeSeconds: Math.floor(process.uptime()),
-    registrationRestricted: !!SERVER_ACCESS_PASSPHRASE,
     smsEnabled: notify.smsEnabled,
     emailEnabled: notify.emailEnabled,
     users: store.countUsers(),
@@ -426,7 +465,7 @@ app.post('/api/recovery/setup', authLimiter, authenticateSession, (req, res) => 
 });
 
 // Begin recovery: if an OTP channel is configured, send a code; else proceed.
-app.post('/api/recovery/start', authLimiter, async (req, res) => {
+app.post('/api/recovery/start', authLimiter, verifyHuman, async (req, res) => {
   const cleanUsername = String(req.body.username || '').trim().toLowerCase();
   const user = store.getUser(cleanUsername);
   if (!user || !user.recovery) {
@@ -473,7 +512,7 @@ app.post('/api/recovery/fetch', authLimiter, (req, res) => {
 
 // Finalize recovery: prove the recovery key, rotate login + recovery, store the
 // re-encrypted vault, and hand back a fresh session.
-app.post('/api/recovery/reset', authLimiter, (req, res) => {
+app.post('/api/recovery/reset', authLimiter, verifyHuman, (req, res) => {
   const cleanUsername = String(req.body.username || '').trim().toLowerCase();
   const { recoveryAuthKey, otp, newAuthKey, newRecovery, vault } = req.body;
   const user = store.getUser(cleanUsername);
@@ -669,6 +708,6 @@ app.listen(PORT, () => {
   console.log(` Port: ${PORT}                                      `);
   console.log(` DB location: ${store.dbPath}                       `);
   console.log(` Backups folder: ${BACKUPS_DIR}                     `);
-  console.log(` Invite code required for register: ${!!SERVER_ACCESS_PASSPHRASE}`);
+  console.log(` Bot protection (reCAPTCHA): ${RECAPTCHA_SECRET ? 'on' : 'off'}`);
   console.log(`===================================================`);
 });

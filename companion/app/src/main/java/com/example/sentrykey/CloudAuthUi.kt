@@ -55,11 +55,10 @@ object CloudAuth {
         url: String,
         username: String,
         password: String,
-        isRegister: Boolean,
-        invite: String
+        isRegister: Boolean
     ) {
         val keys = CloudCrypto.deriveUserKeys(username, password)
-        if (isRegister) CloudBackupClient.register(url, username, keys.authKey, invite)
+        if (isRegister) CloudBackupClient.register(url, username, keys.authKey)
         val token = CloudBackupClient.login(url, username, keys.authKey)
         vaultStorage.setCloudServerUrl(url)
         vaultStorage.setCloudUsername(username)
@@ -105,7 +104,6 @@ private fun CloudAuthScreen(
     var serverUrl by remember { mutableStateOf(vaultStorage.getCloudServerUrl()) }
     var username by remember { mutableStateOf(vaultStorage.getCloudUsername()) }
     var password by remember { mutableStateOf("") }
-    var inviteCode by remember { mutableStateOf("") }
     var isRegister by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -129,7 +127,7 @@ private fun CloudAuthScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.Default) {
-                    CloudAuth.connect(vaultStorage, serverUrl, username, password, isRegister, inviteCode)
+                    CloudAuth.connect(vaultStorage, serverUrl, username, password, isRegister)
                 }
                 onSignedIn()
             } catch (e: Exception) {
@@ -163,10 +161,6 @@ private fun CloudAuthScreen(
         AuthField("Username", username, enabled = !busy) { username = it }
         Spacer(Modifier.height(10.dp))
         AuthField("Master password", password, isPassword = true, enabled = !busy) { password = it }
-        if (isRegister) {
-            Spacer(Modifier.height(10.dp))
-            AuthField("Invite code (if required)", inviteCode, enabled = !busy) { inviteCode = it }
-        }
 
         error?.let {
             Spacer(Modifier.height(10.dp))

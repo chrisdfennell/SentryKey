@@ -18,9 +18,9 @@ enum CloudBackupClient {
         let sizeBytes: Int
     }
 
-    static func register(baseURL: String, username: String, authKey: String, inviteCode: String) async throws {
+    static func register(baseURL: String, username: String, authKey: String) async throws {
         _ = try await request(baseURL, "/api/auth/register", method: "POST",
-                              body: ["username": username, "authKey": authKey, "inviteCode": inviteCode])
+                              body: ["username": username, "authKey": authKey])
     }
 
     static func login(baseURL: String, username: String, authKey: String) async throws -> String {
@@ -130,6 +130,12 @@ enum CloudBackupClient {
         req.timeoutInterval = 30
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token = token { req.setValue(token, forHTTPHeaderField: "X-Session-Token") }
+        // Proves this is the official app so the server's reCAPTCHA gate lets us
+        // through (the phone app can't run reCAPTCHA). Set APP_API_KEY in Info.plist
+        // (from a build setting) to match the server's APP_API_KEY; empty = omitted.
+        if let appKey = Bundle.main.object(forInfoDictionaryKey: "APP_API_KEY") as? String, !appKey.isEmpty {
+            req.setValue(appKey, forHTTPHeaderField: "X-SentryKey-App-Key")
+        }
         if let payload = payload {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = Data(payload.utf8)

@@ -28,12 +28,11 @@ object CloudBackupClient {
     data class BackupMeta(val filename: String, val timestamp: String, val sizeBytes: Long)
 
     /** Registers a new account. Throws [CloudException] on any server-side rejection. */
-    suspend fun register(baseUrl: String, username: String, authKey: String, inviteCode: String) =
+    suspend fun register(baseUrl: String, username: String, authKey: String) =
         withContext(Dispatchers.IO) {
             val body = JSONObject().apply {
                 put("username", username)
                 put("authKey", authKey)
-                put("inviteCode", inviteCode)
             }
             request(baseUrl, "/api/auth/register", "POST", body = body)
             Unit
@@ -175,6 +174,11 @@ object CloudBackupClient {
             readTimeout = 30_000
             setRequestProperty("Accept", "application/json")
             if (token != null) setRequestProperty("X-Session-Token", token)
+            // Proves this is the official app so the server's reCAPTCHA gate lets us
+            // through (the phone app can't run reCAPTCHA). Empty in local builds.
+            if (BuildConfig.APP_API_KEY.isNotEmpty()) {
+                setRequestProperty("X-SentryKey-App-Key", BuildConfig.APP_API_KEY)
+            }
             extraHeaders?.forEach { (k, v) -> setRequestProperty(k, v) }
             if (payload != null) {
                 doOutput = true
